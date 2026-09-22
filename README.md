@@ -126,7 +126,8 @@ node dev/mock-server.mjs --port 9911     # 打开 http://127.0.0.1:9911/
 | `--nows` | 拒绝 WebSocket 升级，强制主题走 5 秒轮询的降级路径 |
 | `--closed` | 头 1.5 秒假装公开页可用，之后 `/api/nodes` 一律 401、`/api/me` 改口 `public_page: false`，用来验证运行期关闭时主题会重查 `/me` 并跳转后台 |
 | `?dark=1` | 以深色模式启动（无头浏览器改不了 `prefers-color-scheme`） |
-| `?click=smooth,base2` | 渲染完成后依次点击，用来在无头环境里截取交互态（`smooth` / `despike` / `only1..3` / `range6`，也可直接写选择器） |
+| `?click=smooth,only2` | 渲染完成后依次点击，用来在无头环境里截取交互态（`smooth` / `despike` / `only1..3` / `range6`，也可直接写选择器） |
+| `?probe=geo` | 把关键元素的 `getBoundingClientRect` 与 `computed display` 写进 `document.title`。判断「有没有对齐」必须量，不能靠看截图猜 |
 
 对着真实 hub 开发时，起一个 hub 实例即可（主题侧无需代理配置，因为本主题不跑 Vite）：
 
