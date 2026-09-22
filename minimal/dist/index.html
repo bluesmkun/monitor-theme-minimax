@@ -16,7 +16,12 @@
   /* 图表色板。顺序即优先级：前三个必须彼此高度可辨——卡片上三网并排，
      蓝 / 橙 / 紫在深浅两种主题下都能一眼分开，绿和红留给在线与告警语义。 */
   --c1:#2563eb; --c2:#ea580c; --c3:#9333ea; --c4:#0891b2; --c5:#16a34a;
-  --r:12px;
+  --r:14px; --r-sm:10px;
+  /* 两级阴影：静置时只给一层极浅的边界感，悬停时才抬起。 */
+  --sh-1:0 1px 2px rgba(15,23,42,.05), 0 1px 3px rgba(15,23,42,.04);
+  --sh-2:0 12px 28px -10px rgba(15,23,42,.20), 0 3px 8px -3px rgba(15,23,42,.08);
+  /* 页头背景的柔光，让整页不是一块死板的纯色。 */
+  --glow-1:rgba(37,99,235,.07); --glow-2:rgba(147,51,234,.055);
   --tnum:tabular-nums;
 }
 html.dark{
@@ -25,10 +30,17 @@ html.dark{
   --fg:#f2f3f5; --muted:#a1a7b3; --faint:#666c78;
   --ok:#22c55e; --warn:#f59e0b; --bad:#f87171; --accent:#60a5fa;
   --c1:#60a5fa; --c2:#fb923c; --c3:#c084fc; --c4:#22d3ee; --c5:#4ade80;
+  --sh-1:0 1px 2px rgba(0,0,0,.5), 0 1px 3px rgba(0,0,0,.35);
+  --sh-2:0 14px 32px -12px rgba(0,0,0,.78), 0 3px 10px -4px rgba(0,0,0,.5);
+  --glow-1:rgba(96,165,250,.10); --glow-2:rgba(192,132,252,.075);
 }
 html,body{height:100%}
 body{
   margin:0;background:var(--bg);color:var(--fg);
+  background-image:
+    radial-gradient(880px 420px at 10% -150px, var(--glow-1), transparent 70%),
+    radial-gradient(760px 380px at 90% -130px, var(--glow-2), transparent 70%);
+  background-repeat:no-repeat;
   font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",Roboto,sans-serif;
   -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
 }
@@ -45,13 +57,13 @@ h1,h2,h3,h4,p{margin:0}
 /* ---------- header ---------- */
 header.top{position:sticky;top:0;z-index:20;background:var(--bg-a);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
 .top-in{display:flex;align-items:center;gap:10px;height:52px}
-.brand{display:flex;align-items:center;gap:8px;font-weight:640;font-size:15px;letter-spacing:.2px;transition:opacity .15s}
+.brand{display:flex;align-items:center;gap:9px;font-weight:650;font-size:15px;letter-spacing:-.1px;transition:opacity .15s}
 .brand:hover{opacity:.7}
-.brand .mark{width:14px;height:14px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 20%,transparent)}
+.brand .mark{width:13px;height:13px;border-radius:50%;background:linear-gradient(140deg,var(--ok),color-mix(in srgb,var(--ok) 55%,var(--c4)));box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 18%,transparent)}
 .spacer{flex:1}
-.iconbtn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:30px;padding:0 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;color:var(--muted);background:var(--panel);transition:color .15s,border-color .15s}
-.iconbtn:hover{color:var(--fg);border-color:var(--faint)}
-.iconbtn.only{width:30px;padding:0}
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:31px;padding:0 11px;border:1px solid var(--line);border-radius:9px;font-size:13px;color:var(--muted);background:var(--panel);box-shadow:var(--sh-1);transition:color .15s,border-color .15s,box-shadow .15s,transform .15s}
+.iconbtn:hover{color:var(--fg);border-color:var(--faint);box-shadow:var(--sh-2);transform:translateY(-1px)}
+.iconbtn.only{width:31px;padding:0}
 .iconbtn svg{width:15px;height:15px}
 
 main{padding:18px 0 64px}
@@ -59,11 +71,12 @@ main{padding:18px 0 64px}
 .alert button,.alert a{text-decoration:underline;color:inherit}
 
 /* ---------- summary ---------- */
-.summary{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px}
+.summary{display:grid;grid-template-columns:repeat(2,1fr);gap:11px;margin-bottom:18px}
 @media(min-width:720px){.summary{grid-template-columns:repeat(4,1fr)}}
 /* 汇总磁贴：顶部一道彩色细条 + 同色的小圆点，四个磁贴各有自己的色相，
    整页的底色仍然克制。 */
-.tile{position:relative;overflow:hidden;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:13px 14px 12px;min-width:0}
+.tile{position:relative;overflow:hidden;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+  padding:14px 15px 13px;min-width:0;box-shadow:var(--sh-1)}
 .tile::before{content:"";position:absolute;left:0;top:0;width:100%;height:3px;background:var(--tint,var(--faint))}
 .tile.t-online{--tint:var(--ok)}
 .tile.t-lat{--tint:var(--c1)}
@@ -71,26 +84,27 @@ main{padding:18px 0 64px}
 .tile.t-cost{--tint:var(--c3)}
 .tile .k{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tile .k .dot{background:var(--tint,var(--faint))}
-.tile .v{font-size:20px;font-weight:620;margin-top:4px;letter-spacing:-.2px;font-variant-numeric:var(--tnum);overflow-wrap:anywhere}
-.tile .v small{font-size:12px;font-weight:500;color:var(--muted);margin-left:4px}
-.tile .s{font-size:11.5px;color:var(--faint);margin-top:2px;font-variant-numeric:var(--tnum);overflow-wrap:anywhere}
+.tile .v{font-size:22px;font-weight:650;margin-top:5px;letter-spacing:-.5px;font-variant-numeric:var(--tnum);overflow-wrap:anywhere}
+.tile .v small{font-size:12px;font-weight:500;color:var(--muted);margin-left:4px;letter-spacing:0}
+.tile .s{font-size:11.5px;color:var(--faint);margin-top:3px;font-variant-numeric:var(--tnum);overflow-wrap:anywhere}
 
 /* ---------- node grid ---------- */
 /* 卡片内容密度高（三路延迟 + 三条占用 + 速率费用流量），最窄也要保证
    占用条的数值不被截断，所以最多排三列，断点相应上移。 */
-.grid{display:grid;gap:12px;grid-template-columns:1fr}
+.grid{display:grid;gap:13px;grid-template-columns:1fr}
 @media(min-width:780px){.grid{grid-template-columns:repeat(2,1fr)}}
 @media(min-width:1140px){.grid{grid-template-columns:repeat(3,1fr)}}
 
-.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;min-width:0;cursor:pointer;transition:border-color .15s,transform .15s}
-.card:hover{border-color:var(--faint)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;min-width:0;cursor:pointer;
+  box-shadow:var(--sh-1);transition:border-color .18s,transform .18s,box-shadow .18s}
+.card:hover{border-color:var(--faint);transform:translateY(-2px);box-shadow:var(--sh-2)}
 .card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.card.off{background:var(--panel-2)}
+.card.off{background:var(--panel-2);box-shadow:none}
 .card.off .nname{color:var(--muted)}
 .chead{display:flex;align-items:flex-start;gap:10px}
 .chead .l{min-width:0;flex:1}
 .nline{display:flex;align-items:center;gap:6px;min-width:0}
-.nname{font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nname{font-weight:640;font-size:15px;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chead .r{flex-shrink:0;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:5px}
 .sub{margin-top:4px;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
@@ -106,8 +120,9 @@ main{padding:18px 0 64px}
 .exp{font-size:11.5px;font-variant-numeric:var(--tnum);white-space:nowrap}
 
 /* ---------- 延迟检测块：每路探测一行，三网就有三行 ---------- */
-.latbox{margin-top:11px;padding:9px 10px 8px;border:1px solid var(--line-2);border-radius:9px;background:var(--panel-2)}
-.lathead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:11px;color:var(--muted);margin-bottom:4px}
+.latbox{margin-top:12px;padding:10px 11px 9px;border:1px solid var(--line-2);border-radius:var(--r-sm);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--c1) 5%,var(--panel)) 0%,var(--panel-2) 100%)}
+.lathead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:11px;color:var(--muted);margin-bottom:5px}
 .lathead .hint{font-size:10.5px;color:var(--faint)}
 .latrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(32px,1.05fr) auto;align-items:center;gap:9px;height:23px;font-size:11.5px}
 .latrow .pn{display:flex;align-items:center;gap:6px;min-width:0;color:var(--muted)}
@@ -163,9 +178,9 @@ main{padding:18px 0 64px}
 .back{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);margin-bottom:14px}
 .back:hover{color:var(--fg)}
 .dhead{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:6px}
-.dhead h1{font-size:21px;font-weight:660;letter-spacing:-.3px}
+.dhead h1{font-size:23px;font-weight:660;letter-spacing:-.5px}
 .dsub{font-size:12.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px 14px;margin-bottom:18px}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:14px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:17px;margin-bottom:14px;box-shadow:var(--sh-1)}
 .panel>h2{font-size:13px;font-weight:620;display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
 /* 每个面板左侧一道小色条，把详情页的几个区块分开 */
 .panel>h2::before{content:"";width:3px;height:13px;border-radius:2px;background:var(--accent-bar,var(--line));flex-shrink:0}
@@ -176,7 +191,7 @@ main{padding:18px 0 64px}
 .panel>h2 .hint{font-size:11.5px;font-weight:400;color:var(--faint)}
 .seg{margin-left:auto;display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2)}
 .seg button{font-size:11.5px;padding:3px 9px;border-radius:6px;color:var(--muted);transition:background .15s,color .15s}
-.seg button.on{background:var(--fg);color:var(--bg);font-weight:550}
+.seg button.on{background:var(--fg);color:var(--bg);font-weight:550;box-shadow:var(--sh-1)}
 /* 面板标题右侧的控制组：处理开关与时间窗各成一组，整组靠右并允许换行 */
 .ctrls{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .ctrls .seg{margin-left:0}
@@ -197,7 +212,6 @@ main{padding:18px 0 64px}
 .chart text{font-size:10.5px;fill:var(--faint);font-variant-numeric:var(--tnum)}
 .chart .grid{stroke:var(--line-2);stroke-width:1}
 .chart .base{stroke:var(--line);stroke-width:1}
-.chart .zero{stroke:var(--faint);stroke-width:1}
 .chart .lbl{fill:var(--muted)}
 .chart-empty{height:120px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--faint)}
 
@@ -443,7 +457,7 @@ function pingSummary(d){
   return { probes: probes, at: Date.now() };
 }
 
-/* ---------------- 曲线处理：削峰、平滑、相对基准 ---------------- */
+/* ---------------- 曲线处理：削峰、平滑、只看一路 ---------------- */
 function median(nums){
   if (!nums.length) return null;
   var a = nums.slice().sort(function(p, q){ return p - q; });
@@ -497,27 +511,13 @@ function applyFilters(points, opts){
   return out;
 }
 /**
- * 相对延迟：以某一路探测为基准，其余各路画成与它的差值（基准自己是一条 0 线）。
- * 按时间戳对齐——各路探测共用同一套桶刻度，但某一路超时的位置其它路仍有读数，
- * 所以找不到基准读数的地方留空，而不是补 0。
+ * 只看指定的一路探测。`id` 为 null 时原样返回全部。
+ * 隔离单路的意义在于纵轴会随之重新缩放——一路慢得多的探测混在里面时，
+ * 其余几路会被压成贴着底部的平线，什么都看不出来。
  */
-function relativeTo(probes, baseId){
-  var at = {}, found = false;
-  probes.forEach(function(p){
-    if (p.id !== baseId) return;
-    found = true;
-    p.points.forEach(function(pt){ if (num(pt.y)) at[pt.x] = pt.y; });
-  });
-  if (!found) return probes;
-  return probes.map(function(p){
-    var out = {};
-    for (var k in p) if (Object.prototype.hasOwnProperty.call(p, k)) out[k] = p[k];
-    out.points = p.points.map(function(pt){
-      var b = at[pt.x];
-      return { x: pt.x, y: (num(pt.y) && num(b)) ? pt.y - b : null };
-    });
-    return out;
-  });
+function onlyProbe(probes, id){
+  if (id == null) return probes;
+  return probes.filter(function(p){ return p.id === id; });
 }
 
 /* ---------------- 列表页：为在线节点取一小时延迟 ---------------- */
@@ -596,9 +596,7 @@ function svgChart(o){
   // 网格与 y 轴
   for (var g = 0; g <= 4; g++){
     var v = yMin + (yMax-yMin)*g/4, y = sy(v);
-    // 相对延迟有正有负，0 那条线单独画实，作为基准参考线
-    var isZero = o.zeroLine && Math.abs(v) < (yMax - yMin) * 1e-6;
-    out.push('<line class="' + (isZero ? "zero" : g === 0 ? "base" : "grid") + '" x1="' + pl + '" y1="' + y.toFixed(1) +
+    out.push('<line class="' + (g === 0 ? "base" : "grid") + '" x1="' + pl + '" y1="' + y.toFixed(1) +
       '" x2="' + (w-pr) + '" y2="' + y.toFixed(1) + '"/>');
     out.push('<text class="lbl" x="' + (pl-8) + '" y="' + (y+3.5).toFixed(1) + '" text-anchor="end">' + esc(yFmt(v)) + '</text>');
   }
@@ -871,15 +869,15 @@ var detail = {
   range: { latency:1, resources:1 },
   data: { latency:null, resources:null },
   loading: {},
-  // 延迟面板的三个视图状态：两个曲线处理开关，以及相对延迟的基准探测 id
+  // 延迟面板的三个视图状态：两个曲线处理开关，以及「只看这一路」的探测 id
   latSmooth: false,
   latDespike: false,
-  latBase: null
+  latOnly: null
 };
 function resetLatView(){
   detail.latSmooth = false;
   detail.latDespike = false;
-  detail.latBase = null;
+  detail.latOnly = null;
 }
 
 function costPanel(n){
@@ -981,6 +979,11 @@ var PALETTE = ["var(--c1)","var(--c2)","var(--c3)","var(--c4)","var(--c5)"];
 var DASHES = [null, "6 3", "2 3", "10 4 2 4", "1 4"];
 /** 第 i 路探测的颜色。前几路是蓝 / 橙 / 紫，深浅两种主题下都能一眼分开。 */
 function probeColor(i){ return PALETTE[((i % PALETTE.length) + PALETTE.length) % PALETTE.length]; }
+/** 某一路在列表里的位置。隔离后仍按这个位置取色，颜色不会跳。 */
+function probeIndex(probes, id){
+  for (var i = 0; i < probes.length; i++) if (probes[i].id === id) return i;
+  return 0;
+}
 
 /** 复制一路探测并替换其曲线点，其余字段（名称、丢包）原样保留。 */
 function withPoints(p, points){
@@ -997,79 +1000,66 @@ function renderLatency(){
   var s = pingSummary(d);
   if (!s || !s.probes.length){ box.innerHTML = '<div class="chart-empty">该窗口内没有探测记录</div>'; return; }
 
-  // 换了时间窗之后，原先选作基准的那一路可能已经不在数据里
-  if (detail.latBase != null && !s.probes.some(function(p){ return p.id === detail.latBase; })) detail.latBase = null;
+  // 换了时间窗之后，原先隔离的那一路可能已经不在数据里
+  if (detail.latOnly != null && !s.probes.some(function(p){ return p.id === detail.latOnly; })) detail.latOnly = null;
 
   var hours = detail.range.latency;
   var filters = { smooth: detail.latSmooth, despike: detail.latDespike };
   var anyFilter = filters.smooth || filters.despike;
 
-  var probes = anyFilter
+  var all = anyFilter
     ? s.probes.map(function(p){ return withPoints(p, applyFilters(p.points, filters)); })
     : s.probes;
 
-  var baseId = detail.latBase;
-  var baseName = "";
-  if (baseId != null) probes.forEach(function(p){ if (p.id === baseId) baseName = p.name; });
-  var chartProbes = baseId != null ? relativeTo(probes, baseId) : probes;
+  var only = detail.latOnly;
+  var onlyName = "";
+  if (only != null) all.forEach(function(p){ if (p.id === only) onlyName = p.name; });
+  var shown = onlyProbe(all, only);
 
-  var series = chartProbes.map(function(p, i){
-    return { name: p.name, color: probeColor(i), dash: DASHES[i % DASHES.length], points: p.points };
+  // 颜色按在完整列表里的位置取，来回切换隔离时同一路的颜色不会变
+  var series = shown.map(function(p){
+    var i = probeIndex(all, p.id);
+    return { name: p.name, color: probeColor(i), dash: DASHES[i % DASHES.length],
+      points: p.points, fill: shown.length === 1 };
   });
 
-  var chartOpts = { series: series, h: 200, padL: baseId != null ? 46 : 50, xFmt: clockFor(hours) };
-  if (baseId != null){
-    // 相对模式的纵轴：有正有负就取对称，只朝一边就贴着 0 起
-    var lo = Infinity, hi = -Infinity;
-    chartProbes.forEach(function(p){ p.points.forEach(function(pt){
-      if (!num(pt.y)) return;
-      if (pt.y < lo) lo = pt.y;
-      if (pt.y > hi) hi = pt.y;
-    }); });
-    if (isFinite(lo) && isFinite(hi)){
-      if (lo < 0 && hi > 0){ var m = niceTop(Math.max(-lo, hi)); chartOpts.yMin = -m; chartOpts.yMax = m; }
-      else if (lo >= 0){ chartOpts.yMin = 0; chartOpts.yMax = niceTop(hi); }
-      else { chartOpts.yMin = -niceTop(-lo); chartOpts.yMax = 0; }
-    }
-    chartOpts.yFmt = function(v){ return (v > 0 ? "+" : "") + tickNum(v); };
-    chartOpts.zeroLine = true;
-  } else {
-    chartOpts.yFmt = function(v){ return tickNum(v) + " ms"; };
-  }
+  var chartOpts = { series: series, h: 200, padL: 50, xFmt: clockFor(hours),
+    yFmt: function(v){ return tickNum(v) + " ms"; } };
 
   var html = '<div class="chartbox">' + svgChart(chartOpts) + '</div>';
 
-  // 图例即基准选择器：点一路把它设为基准，再点一次取消。只有一路时无从比较，不渲染。
-  if (probes.length > 1){
-    html += '<div class="legend">' + probes.map(function(p, i){
-      var on = p.id === baseId;
-      return '<button class="leg' + (on ? " on" : "") + '" data-act="lat-base" data-id="' + p.id + '">' +
+  // 图例始终列全：它同时是选择器，隔离之后还得靠它切回来
+  if (all.length > 1){
+    html += '<div class="legend">' + all.map(function(p, i){
+      var on = p.id === only;
+      return '<button class="leg' + (on ? " on" : "") + '" data-act="lat-only" data-id="' + p.id + '"' +
+        ' title="' + (on ? "再点一次显示全部" : "只看这一路") + '">' +
         '<i style="background:' + probeColor(i) + '"></i>' + esc(p.name) +
-        (on ? ' <span class="tag">基准</span>' : '') + '</button>';
+        (on ? ' <span class="tag">仅看</span>' : '') + '</button>';
     }).join("") + '</div>';
   }
 
   var notes = [];
   if (filters.despike) notes.push("<b>已削峰</b>");
   if (filters.smooth) notes.push("<b>已平滑</b>");
-  if (baseId != null) notes.push("相对 <b>" + esc(baseName) + "</b>，单位 ms");
+  if (only != null) notes.push("仅显示 <b>" + esc(onlyName) + "</b>，纵轴已按这一路重新缩放");
   if (notes.length){
     html += '<p class="lat-note">' + notes.join(" · ") +
       (anyFilter ? '　曲线为处理后的结果，下表统计仍基于原始样本' : '') +
-      (probes.length > 1 && baseId == null ? '　点图例或下表任意一路可切换为基准' : '') +
-      (baseId != null ? '　再点一次取消' : '') + '</p>';
-  } else if (probes.length > 1) {
-    html += '<p class="lat-note">点图例或下表任意一路，可切换为相对延迟基准</p>';
+      (only != null ? '　再点一次图例或下表可显示全部' : '') + '</p>';
+  } else if (all.length > 1) {
+    html += '<p class="lat-note">点图例或下表任意一路，可只看这一路</p>';
   }
 
-  var selectable = probes.length > 1;
+  var selectable = all.length > 1;
   html += '<table class="probes"><thead><tr><th>探测</th><th>当前</th><th>平均</th><th>最低</th><th>最高</th><th>丢包</th></tr></thead><tbody>' +
-    probes.map(function(p, i){
-      var on = p.id === baseId;
+    shown.map(function(p){
+      var i = probeIndex(all, p.id);
+      var on = p.id === only;
       return '<tr class="' + (on ? "on" : "") + '"' +
-        (selectable ? ' data-act="lat-base" data-id="' + p.id + '"' : '') + '>' +
+        (selectable ? ' data-act="lat-only" data-id="' + p.id + '"' : '') + '>' +
         '<td><span class="pname"><i style="width:10px;height:2px;border-radius:1px;background:' + probeColor(i) + '"></i>' +
-        esc(p.name) + (on ? ' <span class="tag">基准</span>' : '') + '</span></td>' +
+        esc(p.name) + (on ? ' <span class="tag">仅看</span>' : '') + '</span></td>' +
         '<td>' + (p.last == null ? '<span class="faint">超时</span>' : Math.round(p.last) + ' ms') + '</td>' +
         '<td>' + (p.avg == null ? "—" : Math.round(p.avg) + ' ms') + '</td>' +
         '<td>' + (p.min == null ? "—" : Math.round(p.min) + ' ms') + '</td>' +
@@ -1077,7 +1067,7 @@ function renderLatency(){
         '<td class="' + (p.loss > 0 ? "bad" : "") + '">' + (p.loss > 0 ? (p.loss < 1 ? "&lt;1" : Math.round(p.loss)) + "%" : "0%") + '</td></tr>';
     }).join("") + '</tbody></table>';
 
-  var maxLoss = probes.reduce(function(a, p){ return Math.max(a, p.loss); }, 0);
+  var maxLoss = shown.reduce(function(a, p){ return Math.max(a, p.loss); }, 0);
   if (maxLoss > 0) html += '<p class="lat-note">窗口内丢包率按探测统计，来自响应中的 loss 字段。</p>';
   box.innerHTML = html;
 }
@@ -1206,10 +1196,10 @@ document.addEventListener("click", function(e){
       renderLatency();
       return;
     }
-    if (a === "lat-base"){
+    if (a === "lat-only"){
       var pid = Number(act.getAttribute("data-id"));
-      // 再点一次同一路即取消基准，回到绝对延迟
-      detail.latBase = (detail.latBase === pid) ? null : pid;
+      // 再点一次同一路即取消隔离，回到全部
+      detail.latOnly = (detail.latOnly === pid) ? null : pid;
       renderLatency();
       return;
     }

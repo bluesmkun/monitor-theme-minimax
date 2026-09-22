@@ -303,9 +303,9 @@ const server = http.createServer((req, res) => {
   var ALIAS = {
     smooth: '[data-act="lat-toggle"][data-mode="smooth"]',
     despike: '[data-act="lat-toggle"][data-mode="despike"]',
-    base1: '.legend .leg:nth-child(1)',
-    base2: '.legend .leg:nth-child(2)',
-    base3: '.legend .leg:nth-child(3)',
+    only1: '.legend .leg:nth-child(1)',
+    only2: '.legend .leg:nth-child(2)',
+    only3: '.legend .leg:nth-child(3)',
     range6: '[data-act="range"][data-kind="latency"][data-h="6"]'
   };
   var steps = ${JSON.stringify(steps)}, i = 0;

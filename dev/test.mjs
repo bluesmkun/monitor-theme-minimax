@@ -336,18 +336,20 @@ eq(T.median([4, 1, 3, 2]), 2.5, "median：偶数个取两中点的平均");
 
 {
   const probes = [
-    { id: 1, name: "电信", loss: 0, points: [{ x: 100, y: 40 }, { x: 200, y: 50 }, { x: 300, y: null }] },
-    { id: 2, name: "联通", loss: 1.5, points: [{ x: 100, y: 30 }, { x: 200, y: 60 }, { x: 300, y: 45 }] },
+    { id: 1, name: "电信", loss: 0, points: [{ x: 100, y: 40 }] },
+    { id: 2, name: "联通", loss: 1.5, points: [{ x: 100, y: 30 }] },
+    { id: 3, name: "移动", loss: 0.4, points: [{ x: 100, y: 55 }] },
   ];
-  const rel = T.relativeTo(probes, 1);
-  eq(rel[0].points.map((p) => p.y), [0, 0, null], "relativeTo：基准自己是一条 0 线");
-  eq(rel[1].points[0].y, -10, "relativeTo：比基准快则为负");
-  eq(rel[1].points[1].y, 10, "relativeTo：比基准慢则为正");
-  eq(rel[1].points[2].y, null, "relativeTo：基准在该时刻超时，差值为空而不是当成 0");
-  eq(rel[1].name, "联通", "relativeTo：名称等字段原样保留");
-  eq(rel[1].loss, 1.5, "relativeTo：丢包率不受影响");
-  eq(probes[1].points[0].y, 30, "relativeTo：不得改动传入的数组");
-  eq(T.relativeTo(probes, 99), probes, "relativeTo：基准不在数据里时原样返回");
+  ok(T.onlyProbe(probes, null) === probes, "onlyProbe：id 为 null 时原样返回全部，不做无谓复制");
+  eq(T.onlyProbe(probes, 2).length, 1, "onlyProbe：隔离后只剩一路");
+  eq(T.onlyProbe(probes, 2)[0].name, "联通", "onlyProbe：留下的是点中的那一路");
+  eq(T.onlyProbe(probes, 2)[0].points, probes[1].points, "onlyProbe：曲线数据原样带出");
+  eq(T.onlyProbe(probes, 99), [], "onlyProbe：id 不存在时返回空，而不是退回全部");
+  eq(probes.length, 3, "onlyProbe：不得改动传入的数组");
+
+  // 隔离后仍按在完整列表里的位置取色，否则切来切去同一路的颜色会变
+  eq(T.probeIndex(probes, 3), 2, "probeIndex：取在完整列表里的位置");
+  eq(T.probeIndex(probes, 99), 0, "probeIndex：找不到时不返回 undefined");
 }
 
 /* ------------------------------------------------- 6. 地区与坐标轴 */
