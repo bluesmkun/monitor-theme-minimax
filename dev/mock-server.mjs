@@ -297,6 +297,28 @@ const server = http.createServer((req, res) => {
     if (url.searchParams.get("dark") === "1") {
       html = html.replace("<head>", '<head><script>try{localStorage.setItem("theme","dark")}catch(e){}</script>');
     }
+    // 仅供预览：?probe=table 报出探测表各单元格的横向位置，用来判断
+    // 「某个元素出现后有没有把别的列挤走」。
+    if (url.searchParams.get("probe") === "table") {
+      html = html.replace("</body>", `<script>
+setTimeout(function(){
+  var t = document.querySelector("table.probes");
+  if (!t) { document.title = "NO TABLE"; return; }
+  var out = ["table w=" + Math.round(t.getBoundingClientRect().width) +
+    " layout=" + getComputedStyle(t).tableLayout];
+  var rows = t.querySelectorAll("tbody tr");
+  [].forEach.call(rows, function(tr, ri){
+    var cells = [].map.call(tr.children, function(td){
+      var r = td.getBoundingClientRect();
+      return Math.round(r.left) + "+" + Math.round(r.width);
+    });
+    out.push("row" + ri + " " + cells.join(" "));
+  });
+  out.push("tag数=" + t.querySelectorAll(".tag").length);
+  document.title = out.join(" | ");
+}, 3200);   // 必须晚于 ?click 的点击序列，否则量到的是点击前的状态
+</script></body>`);
+    }
     // 仅供预览：?probe=geo 把关键元素的几何写进 title，用 --dump-dom 读出来。
     // 判断「有没有对齐」要靠量，不能靠看截图猜。
     if (url.searchParams.get("probe") === "geo") {

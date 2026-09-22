@@ -224,6 +224,10 @@ main{padding:18px 0 64px}
 .legend .leg.on{background:var(--panel-2);border-color:var(--line);color:var(--fg)}
 .legend .leg i{width:12px;height:2px;border-radius:1px;display:block;flex-shrink:0}
 .tag{font-size:10px;color:var(--faint);border:1px solid var(--line);border-radius:999px;padding:0 5px;white-space:nowrap}
+/* 标识始终占位、只切可见性：表格是 table-layout:auto，一旦这个元素从无到有，
+   名称列会变宽并把「当前/平均/最低/最高/丢包」五列一起挤窄，数字就跳位。
+   用 display:none 不行——那等于没有占位，照样跳。 */
+.tag.reserve{visibility:hidden}
 .lat-note{margin-top:10px;font-size:11.5px;color:var(--faint);line-height:1.7}
 .lat-note b{color:var(--muted);font-weight:550}
 
@@ -991,6 +995,13 @@ function withPoints(p, points){
   out.points = points;
   return out;
 }
+/**
+ * 「仅看」标识。未选中时用 visibility 隐藏而不是不渲染——它必须始终占着位置，
+ * 否则表格的名称列会在点击前后变宽，把右侧的数值列一起挤动。
+ */
+function tagHTML(on){
+  return ' <span class="tag' + (on ? "" : " reserve") + '">仅看</span>';
+}
 function renderLatency(){
   var box = document.getElementById("lat-box");
   if (!box) return;
@@ -1035,8 +1046,7 @@ function renderLatency(){
       var on = p.id === only;
       return '<button class="leg' + (on ? " on" : "") + '" data-act="lat-only" data-id="' + p.id + '"' +
         ' title="' + (on ? "再点一次显示全部" : "只看这一路") + '">' +
-        '<i style="background:' + probeColor(i) + '"></i>' + esc(p.name) +
-        (on ? ' <span class="tag">仅看</span>' : '') + '</button>';
+        '<i style="background:' + probeColor(i) + '"></i>' + esc(p.name) + tagHTML(on) + '</button>';
     }).join("") + '</div>';
   }
 
@@ -1061,7 +1071,7 @@ function renderLatency(){
       return '<tr class="' + (on ? "on" : "") + '"' +
         (selectable ? ' data-act="lat-only" data-id="' + p.id + '"' : '') + '>' +
         '<td><span class="pname"><i style="width:10px;height:2px;border-radius:1px;background:' + probeColor(i) + '"></i>' +
-        esc(p.name) + (on ? ' <span class="tag">仅看</span>' : '') + '</span></td>' +
+        esc(p.name) + tagHTML(on) + '</span></td>' +
         '<td>' + (p.last == null ? '<span class="faint">超时</span>' : Math.round(p.last) + ' ms') + '</td>' +
         '<td>' + (p.avg == null ? "—" : Math.round(p.avg) + ' ms') + '</td>' +
         '<td>' + (p.min == null ? "—" : Math.round(p.min) + ' ms') + '</td>' +
