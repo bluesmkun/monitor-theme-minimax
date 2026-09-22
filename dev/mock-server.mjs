@@ -97,6 +97,16 @@ const SPECS = [
     agent_version: "", price: 0, currency: "CNY", billing_cycle: "",
     expires_at: null, traffic_limit: 0, traffic_mode: "sum", traffic_reset_day: 0,
     latency: [0, 0, 0], loss: [0, 0, 0]
+  },
+  {
+    // 免费机：价格留空但已经接入，用来验证卡片和详情页把它显示成「免费」
+    id: 7, name: "免费 · 甲骨文东京", sort: 7, country: "JP", online: true,
+    os: "Ubuntu 24.04.1 LTS", kernel: "6.8.0-45-generic", arch: "aarch64", virt: "kvm",
+    cpu_name: "Ampere(R) Altra(R) Processor", cpu_cores: 4,
+    mem_total: 24 * GB, swap_total: 4 * GB, disk_total: 200 * GB,
+    agent_version: "0.9.4", price: 0, currency: "CNY", billing_cycle: "",
+    expires_at: null, traffic_limit: 10 * 1024 * GB, traffic_mode: "sum", traffic_reset_day: 0,
+    latency: [82, 76, 95], loss: [0.2, 0, 0.6]
   }
 ];
 
@@ -282,6 +292,35 @@ const server = http.createServer((req, res) => {
     // 没有可靠的办法去改 prefers-color-scheme）。
     if (url.searchParams.get("dark") === "1") {
       html = html.replace("<head>", '<head><script>try{localStorage.setItem("theme","dark")}catch(e){}</script>');
+    }
+    // 仅供预览：?click=smooth,base2 —— 渲染完成后依次点击，用来在无头环境里
+    // 截取交互后的状态（按钮、图例选中态），省得为了看一眼去装整套浏览器自动化。
+    const clicks = url.searchParams.get("click");
+    if (clicks) {
+      const steps = clicks.split(",").map((s) => s.trim()).filter(Boolean);
+      html = html.replace("</body>", `<script>
+(function(){
+  var ALIAS = {
+    smooth: '[data-act="lat-toggle"][data-mode="smooth"]',
+    despike: '[data-act="lat-toggle"][data-mode="despike"]',
+    base1: '.legend .leg:nth-child(1)',
+    base2: '.legend .leg:nth-child(2)',
+    base3: '.legend .leg:nth-child(3)',
+    range6: '[data-act="range"][data-kind="latency"][data-h="6"]'
+  };
+  var steps = ${JSON.stringify(steps)}, i = 0;
+  function step(){
+    if (i >= steps.length) return;
+    var sel = ALIAS[steps[i]] || steps[i];
+    i++;
+    var el = document.querySelector(sel);
+    if (el) el.click();
+    setTimeout(step, 700);
+  }
+  // 首屏要等主题把数据取回来并渲染完，再开始点
+  setTimeout(step, 1600);
+})();
+</script></body>`);
     }
     res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
     res.end(html);

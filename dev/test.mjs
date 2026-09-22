@@ -268,7 +268,89 @@ eq(T.pingSummary({ ping: [] }).probes, [], "pingSummary：空样本");
     "spark：全等值时量程为 0，要兜底而不是除零");
 }
 
-/* ------------------------------------------------- 5. 地区与坐标轴 */
+/* ------------------------------------- 5. 曲线处理：削峰 / 平滑 / 相对基准 */
+eq(T.median([]), null, "median：空数组");
+eq(T.median([7]), 7, "median：单元素");
+eq(T.median([3, 1, 2]), 2, "median：奇数个取中间");
+eq(T.median([4, 1, 3, 2]), 2.5, "median：偶数个取两中点的平均");
+{
+  const src = [3, 1, 2];
+  T.median(src);
+  eq(src, [3, 1, 2], "median：不得改动传入的数组");
+}
+
+{
+  // 平稳序列里插一个尖峰。注意中位绝对偏差为 0 时滤波不做判定——
+  // 窗口内绝大多数取值相同就无从区分离群点，这是 Hampel 的固有边界。
+  const clean = [50, 52, 49, 51, 53, 48, 50, 52, 51, 49, 50, 52];
+  const pts = clean.map((v, i) => ({ x: i, y: v }));
+  eq(T.despike(pts), pts, "despike：没有离群点时逐点原样通过，不做任何平滑");
+
+  const spiked = pts.map((p) => ({ ...p }));
+  spiked[5] = { x: 5, y: 300 };
+  const fixed = T.despike(spiked);
+  ok(fixed[5].y < 60, "despike：尖峰被换成窗口中位数");
+  eq(fixed[5].x, 5, "despike：替换只改数值，不动时间戳");
+  eq(spiked[5].y, 300, "despike：不得改动传入的数组");
+  ok(fixed.filter((p, i) => i !== 5).every((p, i) => p.y === pts[i === 0 ? 0 : i + (i >= 5 ? 1 : 0)].y),
+    "despike：非离群点一律保持原值——这正是它区别于滑动平均的地方");
+
+  const withNull = T.despike([{ x: 0, y: 50 }, { x: 1, y: null }, { x: 2, y: 52 }, { x: 3, y: 51 }]);
+  eq(withNull[1].y, null, "despike：超时是断点，原样保留");
+  eq(withNull[0].y, 50, "despike：超时不参与邻域中位数的计算");
+}
+
+{
+  const step = [0, 0, 0, 10, 10, 10].map((v, i) => ({ x: i, y: v }));
+  const avg = T.movingAverage(step, 3);
+  eq(avg[0].y, 0, "movingAverage：边界只用窗口内实际存在的样本");
+  eq(avg[1].y, 0, "movingAverage：还没到阶跃处仍为 0");
+  eq(avg[2].y, 10 / 3, "movingAverage：阶跃前一个点被拉高");
+  eq(avg[3].y, 20 / 3, "movingAverage：阶跃后一个点被拉低");
+  eq(avg[4].y, 10, "movingAverage：进入平台后恢复原值");
+  eq(step[2].y, 0, "movingAverage：不得改动传入的数组");
+
+  const withNull = T.movingAverage([{ x: 0, y: 10 }, { x: 1, y: null }, { x: 2, y: 20 }], 3);
+  eq(withNull[1].y, null, "movingAverage：超时保持断点，不被平均填平");
+  eq(withNull[0].y, 10, "movingAverage：窗口居中，首点只看得到自己和右边一个（右边是 null，被跳过）");
+  eq(withNull[2].y, 20, "movingAverage：末点同理");
+  // 补一条能真正体现「跳过 null」的：中间点两侧都有有效样本
+  eq(T.movingAverage([{ x: 0, y: 10 }, { x: 1, y: null }, { x: 2, y: 20 }, { x: 3, y: 30 }], 3)[2].y, 25,
+    "movingAverage：跳过 null，只对两侧有效样本求平均");
+}
+
+{
+  const clean = [50, 52, 49, 51, 53, 48, 50, 52, 51, 49, 50, 52];
+  const pts = clean.map((v, i) => ({ x: i, y: v }));
+  const spiked = pts.map((p) => ({ ...p }));
+  spiked[5] = { x: 5, y: 300 };
+
+  ok(T.applyFilters(spiked, {}) === spiked, "applyFilters：两个开关都关时原样返回，不做无谓复制");
+  ok(T.applyFilters(spiked, { despike: true })[5].y < 60, "applyFilters：只开削峰时尖峰被换成中位数");
+  eq(T.applyFilters(spiked, { smooth: true })[5].y, (51 + 53 + 300 + 50 + 52) / 5,
+    "applyFilters：只开平滑时尖峰只是被摊薄，没有被去掉");
+  const both = T.applyFilters(spiked, { despike: true, smooth: true });
+  eq(both.length, 12, "applyFilters：两个开关可叠加");
+  ok(both[5].y < 60, "applyFilters：叠加后尖峰同样被压掉");
+}
+
+{
+  const probes = [
+    { id: 1, name: "电信", loss: 0, points: [{ x: 100, y: 40 }, { x: 200, y: 50 }, { x: 300, y: null }] },
+    { id: 2, name: "联通", loss: 1.5, points: [{ x: 100, y: 30 }, { x: 200, y: 60 }, { x: 300, y: 45 }] },
+  ];
+  const rel = T.relativeTo(probes, 1);
+  eq(rel[0].points.map((p) => p.y), [0, 0, null], "relativeTo：基准自己是一条 0 线");
+  eq(rel[1].points[0].y, -10, "relativeTo：比基准快则为负");
+  eq(rel[1].points[1].y, 10, "relativeTo：比基准慢则为正");
+  eq(rel[1].points[2].y, null, "relativeTo：基准在该时刻超时，差值为空而不是当成 0");
+  eq(rel[1].name, "联通", "relativeTo：名称等字段原样保留");
+  eq(rel[1].loss, 1.5, "relativeTo：丢包率不受影响");
+  eq(probes[1].points[0].y, 30, "relativeTo：不得改动传入的数组");
+  eq(T.relativeTo(probes, 99), probes, "relativeTo：基准不在数据里时原样返回");
+}
+
+/* ------------------------------------------------- 6. 地区与坐标轴 */
 eq(T.countryName("hk"), "中国香港", "countryName：小写也能认");
 eq(T.countryName("TW"), "中国台湾", "countryName：台湾是中国的一部分");
 eq(T.countryName("mo"), "中国澳门", "countryName：澳门是中国的一部分");
@@ -290,7 +372,12 @@ eq(T.niceTop(0), 1, "niceTop(0)：不能让轴高为 0");
 eq(T.niceTop(-5), 1, "niceTop：负数");
 eq(T.niceTop(100), 100, "niceTop：100 正好落在 25 的阶梯上，轴顶就是 100");
 eq(T.niceTop(26), 30, "niceTop：26 抬到 7.5 的阶梯，轴顶 30");
-eq(T.niceTop(5, 1024), 8, "niceTop：字节轴按 2 的幂取步长");[1, 7, 33, 99, 100, 1000, 12345].forEach((v) => {
+eq(T.niceTop(5, 1024), 8, "niceTop：字节轴按 2 的幂取步长");
+eq(T.tickNum(0), "0", "tickNum：整数不带小数");
+eq(T.tickNum(-7), "-7", "tickNum：负整数");
+eq(T.tickNum(-7.5), "-7.5", "tickNum：半步刻度必须如实印出，四舍五入会和网格线对不上");
+eq(T.tickNum(22.5), "22.5", "tickNum：正半步");
+eq(T.tickNum(20), "20", "tickNum：二十不写成 20.0");[1, 7, 33, 99, 100, 1000, 12345].forEach((v) => {
   ok(T.niceTop(v) >= v, "niceTop(" + v + ") 必须覆盖数据");
 });
 
