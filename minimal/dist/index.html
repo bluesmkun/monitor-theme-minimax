@@ -605,29 +605,34 @@ function svgChart(o){
     if (t < x0 || t > x1) return;
     out.push('<text class="lbl" x="' + sx(t).toFixed(1) + '" y="' + (h-8) + '" text-anchor="middle">' + esc(xFmt(t)) + '</text>');
   });
-  // 折线
+  // 折线。面积填充按连续段分开闭合：超时是断点，整条一起闭合会在断口处拉出
+  // 一条并不存在的直线，等于把丢包画成了一段正常读数。
   series.forEach(function(s, idx){
     var color = s.color || "var(--c1)";
-    var d = "", pen = false, first = null, last = null;
+    var segs = [], cur = [];
     s.points.forEach(function(p){
-      if (!num(p.y)){ pen = false; return; }
-      var X = sx(p.x), Y = sy(p.y);
-      if (first === null) first = X;
-      last = X;
-      d += (pen ? "L" : "M") + X.toFixed(1) + " " + Y.toFixed(1) + " ";
-      pen = true;
+      if (num(p.y)) cur.push(p);
+      else { if (cur.length > 1) segs.push(cur); cur = []; }
     });
-    if (!d) return;
-    if (s.fill && s.points.every(function(p){ return num(p.y); })){
-      out.push('<path d="' + d + 'L' + last.toFixed(1) + ' ' + sy(yMin).toFixed(1) + 'L' + first.toFixed(1) + ' ' +
-        sy(yMin).toFixed(1) + ' Z" fill="' + color + '" fill-opacity=".10" stroke="none"/>');
+    if (cur.length > 1) segs.push(cur);
+    if (!segs.length) return;
+
+    var pathOf = function(seg){
+      var d = "";
+      seg.forEach(function(p, i){ d += (i ? "L" : "M") + sx(p.x).toFixed(1) + " " + sy(p.y).toFixed(1) + " "; });
+      return d.trim();
+    };
+
+    if (s.fill){
+      var base = sy(yMin).toFixed(1);
+      segs.forEach(function(seg){
+        out.push('<path d="' + pathOf(seg) + 'L' + sx(seg[seg.length - 1].x).toFixed(1) + ' ' + base +
+          'L' + sx(seg[0].x).toFixed(1) + ' ' + base + ' Z" fill="' + color +
+          '" fill-opacity=".14" stroke="none"/>');
+      });
     }
-    out.push('<path d="' + d.trim() + '" fill="none" stroke="' + color + '" stroke-width="' + (s.width || 1.6) +
-      '" stroke-linejoin="round" stroke-linecap="round"' + (s.dash ? ' stroke-dasharray="' + s.dash + '"' : '') + '/>');
-    if (o.marker && s.points.length === 1){
-      var p0 = s.points[0];
-      out.push('<circle cx="' + sx(p0.x).toFixed(1) + '" cy="' + sy(p0.y).toFixed(1) + '" r="2.5" fill="' + color + '"/>');
-    }
+    out.push('<path d="' + segs.map(pathOf).join(" ") + '" fill="none" stroke="' + color +
+      '" stroke-width="' + (s.width || 1.6) + '" stroke-linejoin="round" stroke-linecap="round"/>');
   });
   out.push('</svg>');
   return out.join("");
@@ -976,7 +981,6 @@ function renderDetailLive(n){
 }
 
 var PALETTE = ["var(--c1)","var(--c2)","var(--c3)","var(--c4)","var(--c5)"];
-var DASHES = [null, "6 3", "2 3", "10 4 2 4", "1 4"];
 /** 第 i 路探测的颜色。前几路是蓝 / 橙 / 紫，深浅两种主题下都能一眼分开。 */
 function probeColor(i){ return PALETTE[((i % PALETTE.length) + PALETTE.length) % PALETTE.length]; }
 /** 某一路在列表里的位置。隔离后仍按这个位置取色，颜色不会跳。 */
@@ -1016,11 +1020,13 @@ function renderLatency(){
   if (only != null) all.forEach(function(p){ if (p.id === only) onlyName = p.name; });
   var shown = onlyProbe(all, only);
 
-  // 颜色按在完整列表里的位置取，来回切换隔离时同一路的颜色不会变
+  // 色板已经足够区分，不再叠虚线。隔离时单曲线加粗，并在折线下填一层同色面积，
+  // 断口按段分开填充（见 svgChart）。
+  var isolated = shown.length === 1;
   var series = shown.map(function(p){
     var i = probeIndex(all, p.id);
-    return { name: p.name, color: probeColor(i), dash: DASHES[i % DASHES.length],
-      points: p.points, fill: shown.length === 1 };
+    return { name: p.name, color: probeColor(i), points: p.points,
+      fill: isolated, width: isolated ? 2 : 1.6 };
   });
 
   var chartOpts = { series: series, h: 200, padL: 50, xFmt: clockFor(hours),

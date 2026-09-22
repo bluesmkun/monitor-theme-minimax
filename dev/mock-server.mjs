@@ -70,6 +70,8 @@ const SPECS = [
     mem_total: 1 * GB, swap_total: 0, disk_total: 20 * GB,
     agent_version: "0.9.3", price: 45, currency: "CNY", billing_cycle: "quarterly",
     expires_at: "2026-09-27", traffic_limit: 200 * GB, traffic_mode: "down", traffic_reset_day: 5,
+    // 只有一路探测的机器：用来验证「没有可隔离的对象时」不出现图例、表格也只有一行
+    probeIds: [1],
     latency: [96, 88, 118], loss: [0.8, 1.2, 2.1]
   },
   {
@@ -221,7 +223,9 @@ function historyPing(id, hours, points) {
   const from = now - hours * 3600_000;
   const ping = [];
   const loss = {};
-  [1, 2, 3].forEach((taskId, k) => {
+  // 按 taskId 取参数，不能用 forEach 的下标——上面 filter 过，下标和探测 id 不再对应
+  [1, 2, 3].filter((id) => !s.probeIds || s.probeIds.includes(id)).forEach((taskId) => {
+    const k = taskId - 1;
     const baseLat = s.latency[k];
     if (!baseLat) return;
     let dropped = 0, total = 0;
