@@ -3,6 +3,6 @@
   "short": "minimal",
   "description": "简洁明了的公开状态页：在线状态、费用明细、延迟检测与资源占用一屏可读",
   "version": "1.2.0",
-  "author": "minimal",
+  "author": "bluesmkun",
   "url": "https://github.com/bluesmkun/monitor-theme-minimax"
 }
