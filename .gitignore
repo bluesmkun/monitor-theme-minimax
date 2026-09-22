@@ -1,0 +1,12 @@
+# 打包产物，由 dev/package.mjs 生成
+theme.tar.gz
+theme.tar.gz.sha256
+
+# 编辑器与系统
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# 本地 AI 配置，不进仓库
+.workbuddy-ai/
