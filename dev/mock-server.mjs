@@ -297,6 +297,28 @@ const server = http.createServer((req, res) => {
     if (url.searchParams.get("dark") === "1") {
       html = html.replace("<head>", '<head><script>try{localStorage.setItem("theme","dark")}catch(e){}</script>');
     }
+    // 仅供预览：?probe=geo 把关键元素的几何写进 title，用 --dump-dom 读出来。
+    // 判断「有没有对齐」要靠量，不能靠看截图猜。
+    if (url.searchParams.get("probe") === "geo") {
+      html = html.replace("</body>", `<script>
+setTimeout(function(){
+  var card = document.querySelector(".card");
+  if (!card) { document.title = "NO CARD"; return; }
+  var cr = card.getBoundingClientRect();
+  var cs = getComputedStyle(card);
+  var out = ["card right=" + Math.round(cr.right) + " paddingR=" + cs.paddingRight];
+  [".price", ".crow", ".rates", ".crow.small"].forEach(function(sel){
+    var el = card.querySelector(sel);
+    if (!el) { out.push(sel + "=缺失"); return; }
+    var r = el.getBoundingClientRect();
+    out.push(sel + " top=" + Math.round(r.top) + " left=" + Math.round(r.left) + " right=" + Math.round(r.right) +
+      " w=" + Math.round(r.width) + " display=" + getComputedStyle(el).display +
+      " tag=" + el.tagName + " text=" + JSON.stringify((el.textContent || "").trim().slice(0, 14)));
+  });
+  document.title = out.join(" | ");
+}, 1500);
+</script></body>`);
+    }
     // 仅供预览：?click=smooth,base2 —— 渲染完成后依次点击，用来在无头环境里
     // 截取交互后的状态（按钮、图例选中态），省得为了看一眼去装整套浏览器自动化。
     const clicks = url.searchParams.get("click");

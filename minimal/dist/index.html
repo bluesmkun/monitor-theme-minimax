@@ -160,15 +160,18 @@ main{padding:18px 0 64px}
 .cfoot .io .d{color:var(--c1)}
 .cfoot .io .u{color:var(--c2)}
 .cfoot .io b{color:var(--fg);font-weight:550}
-.cfoot .cost{color:var(--muted);white-space:nowrap}
-.cfoot .cost b{color:var(--fg);font-weight:550}
-.cfoot .cost b.free{color:var(--ok)}
+/* 价格栏：margin-left:auto 保证即使这一行换行、它独占一行时也仍然贴右。
+   注意类名不能叫 .cost——详情页费用明细的 .cost 是四列网格，全局生效会把它也套进去。 */
+.cfoot .price{margin-left:auto;text-align:right;color:var(--muted);white-space:nowrap}
+.cfoot .price b{color:var(--fg);font-weight:550}
+.cfoot .price b.free{color:var(--ok)}
 .cfoot .trafficbar{height:2px;border-radius:1px;background:var(--line);margin:7px 0 6px;overflow:hidden}
 .cfoot .trafficbar i{display:block;height:100%;border-radius:1px;background:var(--c4);transition:width .4s ease}
 .cfoot .trafficbar i.warn{background:var(--warn)}
 .cfoot .trafficbar i.bad{background:var(--bad)}
-.cfoot .crow.sub{font-size:11px;color:var(--faint)}
-.cfoot .crow.sub b{color:var(--muted);font-weight:550}
+/* 同理不能叫 .sub：卡片头部的系统行 .sub 带 overflow:hidden 与 nowrap，会把这行裁掉 */
+.cfoot .crow.small{font-size:11px;color:var(--faint)}
+.cfoot .crow.small b{color:var(--muted);font-weight:550}
 
 .empty{padding:64px 0;text-align:center;font-size:13px;color:var(--muted)}
 .skel{background:linear-gradient(90deg,var(--line-2),var(--line),var(--line-2));background-size:200% 100%;animation:sh 1.4s linear infinite;border-radius:var(--r)}
@@ -196,12 +199,12 @@ main{padding:18px 0 64px}
 .ctrls{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .ctrls .seg{margin-left:0}
 
-.cost{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
-@media(min-width:720px){.cost{grid-template-columns:repeat(4,1fr)}}
-.cost .item{min-width:0}
-.cost .item .k{font-size:11.5px;color:var(--muted)}
-.cost .item .v{font-size:15px;font-weight:600;margin-top:3px;font-variant-numeric:var(--tnum)}
-.cost .item .v small{font-size:11.5px;font-weight:400;color:var(--muted);margin-left:3px}
+.costgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+@media(min-width:720px){.costgrid{grid-template-columns:repeat(4,1fr)}}
+.costgrid .item{min-width:0}
+.costgrid .item .k{font-size:11.5px;color:var(--muted)}
+.costgrid .item .v{font-size:15px;font-weight:600;margin-top:3px;font-variant-numeric:var(--tnum)}
+.costgrid .item .v small{font-size:11.5px;font-weight:400;color:var(--muted);margin-left:3px}
 .traffic{margin-top:16px;padding-top:14px;border-top:1px solid var(--line-2)}
 .traffic .trow{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-bottom:7px}
 .traffic .trow .r{font-variant-numeric:var(--tnum);color:var(--muted)}
@@ -605,33 +608,25 @@ function svgChart(o){
     if (t < x0 || t > x1) return;
     out.push('<text class="lbl" x="' + sx(t).toFixed(1) + '" y="' + (h-8) + '" text-anchor="middle">' + esc(xFmt(t)) + '</text>');
   });
-  // 折线。面积填充按连续段分开闭合：超时是断点，整条一起闭合会在断口处拉出
-  // 一条并不存在的直线，等于把丢包画成了一段正常读数。
-  series.forEach(function(s, idx){
+  // 折线。超时的点直接跳过，但**线不断开**——留断口会让整条走势被切成碎片，
+  // 而丢包信息本来就由下表与卡片上的丢包率承载，不必再让曲线去表达。
+  series.forEach(function(s){
     var color = s.color || "var(--c1)";
-    var segs = [], cur = [];
+    var d = "", first = null, last = null;
     s.points.forEach(function(p){
-      if (num(p.y)) cur.push(p);
-      else { if (cur.length > 1) segs.push(cur); cur = []; }
+      if (!num(p.y)) return;
+      var X = sx(p.x), Y = sy(p.y);
+      if (first === null) first = X;
+      last = X;
+      d += (d ? "L" : "M") + X.toFixed(1) + " " + Y.toFixed(1) + " ";
     });
-    if (cur.length > 1) segs.push(cur);
-    if (!segs.length) return;
-
-    var pathOf = function(seg){
-      var d = "";
-      seg.forEach(function(p, i){ d += (i ? "L" : "M") + sx(p.x).toFixed(1) + " " + sy(p.y).toFixed(1) + " "; });
-      return d.trim();
-    };
-
+    if (!d) return;
     if (s.fill){
       var base = sy(yMin).toFixed(1);
-      segs.forEach(function(seg){
-        out.push('<path d="' + pathOf(seg) + 'L' + sx(seg[seg.length - 1].x).toFixed(1) + ' ' + base +
-          'L' + sx(seg[0].x).toFixed(1) + ' ' + base + ' Z" fill="' + color +
-          '" fill-opacity=".14" stroke="none"/>');
-      });
+      out.push('<path d="' + d + 'L' + last.toFixed(1) + ' ' + base + 'L' + first.toFixed(1) + ' ' + base +
+        ' Z" fill="' + color + '" fill-opacity=".14" stroke="none"/>');
     }
-    out.push('<path d="' + segs.map(pathOf).join(" ") + '" fill="none" stroke="' + color +
+    out.push('<path d="' + d.trim() + '" fill="none" stroke="' + color +
       '" stroke-width="' + (s.width || 1.6) + '" stroke-linejoin="round" stroke-linecap="round"/>');
   });
   out.push('</svg>');
@@ -828,12 +823,12 @@ function nodeCard(n){
             '<span class="io"><span class="d">↓</span> <b>' + (m ? rate(m.net_rx) : "—") + '</b></span>' +
             '<span class="io"><span class="u">↑</span> <b>' + (m ? rate(m.net_tx) : "—") + '</b></span>' +
           '</span>' +
-          '<span class="cost">' + costHTML + '</span>' +
+          '<span class="price">' + costHTML + '</span>' +
         '</div>' +
         (trafficPct != null
           ? '<div class="trafficbar"><i class="' + trafficTone + '" style="width:' + trafficPct.toFixed(1) + '%"></i></div>'
           : '') +
-        '<div class="crow sub">' +
+        '<div class="crow small">' +
           '<span>流量 <b>' + esc(trafficText) + '</b></span>' +
           '<span>累计 ↓' + bytes(n.total_rx) + ' ↑' + bytes(n.total_tx) + '</span>' +
         '</div>' +
@@ -894,7 +889,7 @@ function costPanel(n){
   var tone = pct == null ? "" : pct >= 90 ? " bad" : pct >= 75 ? " warn" : "";
   var resetDay = num(n.traffic_reset_day) && n.traffic_reset_day > 0 ? ("每月 " + n.traffic_reset_day + " 日") : "—";
   return '<section class="panel p-cost"><h2>费用明细</h2>' +
-    '<div class="cost">' +
+    '<div class="costgrid">' +
       '<div class="item"><div class="k">价格</div><div class="v">' +
         (num(n.price) && n.price > 0
           ? esc(money(n.price, n.currency)) + '<small>/ ' + esc(cycleLabel(n.billing_cycle)) + '</small>'
@@ -1048,18 +1043,19 @@ function renderLatency(){
   var notes = [];
   if (filters.despike) notes.push("<b>已削峰</b>");
   if (filters.smooth) notes.push("<b>已平滑</b>");
-  if (only != null) notes.push("仅显示 <b>" + esc(onlyName) + "</b>，纵轴已按这一路重新缩放");
+  if (only != null) notes.push("图中仅显示 <b>" + esc(onlyName) + "</b>，纵轴已按这一路重新缩放");
   if (notes.length){
     html += '<p class="lat-note">' + notes.join(" · ") +
       (anyFilter ? '　曲线为处理后的结果，下表统计仍基于原始样本' : '') +
       (only != null ? '　再点一次图例或下表可显示全部' : '') + '</p>';
   } else if (all.length > 1) {
-    html += '<p class="lat-note">点图例或下表任意一路，可只看这一路</p>';
+    html += '<p class="lat-note">点图例或下表任意一路，图中只显示这一路</p>';
   }
 
+  // 下表始终列全：它是读数的地方，不该跟着图一起被筛掉；被隔离的那行高亮。
   var selectable = all.length > 1;
   html += '<table class="probes"><thead><tr><th>探测</th><th>当前</th><th>平均</th><th>最低</th><th>最高</th><th>丢包</th></tr></thead><tbody>' +
-    shown.map(function(p){
+    all.map(function(p){
       var i = probeIndex(all, p.id);
       var on = p.id === only;
       return '<tr class="' + (on ? "on" : "") + '"' +
@@ -1073,7 +1069,7 @@ function renderLatency(){
         '<td class="' + (p.loss > 0 ? "bad" : "") + '">' + (p.loss > 0 ? (p.loss < 1 ? "&lt;1" : Math.round(p.loss)) + "%" : "0%") + '</td></tr>';
     }).join("") + '</tbody></table>';
 
-  var maxLoss = shown.reduce(function(a, p){ return Math.max(a, p.loss); }, 0);
+  var maxLoss = all.reduce(function(a, p){ return Math.max(a, p.loss); }, 0);
   if (maxLoss > 0) html += '<p class="lat-note">窗口内丢包率按探测统计，来自响应中的 loss 字段。</p>';
   box.innerHTML = html;
 }
