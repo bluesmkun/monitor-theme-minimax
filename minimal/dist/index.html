@@ -109,16 +109,13 @@ main{padding:18px 0 64px}
 .mapwrap{flex:1;display:flex;align-items:center;min-height:150px}
 .worldmap{display:block;width:100%;height:auto;overflow:visible}
 .worldmap .land{fill:var(--map-land)}
-/* 亮点 = 一枚国旗 + 一圈细线；线的颜色表示在线情况，国旗本身不染色，
-   这样「哪国」和「状态」是两条互不相扰的信息。 */
-.mdot{cursor:pointer}
-.mdot .plate{fill:var(--panel);stroke-width:1.6;transition:stroke-width .15s}
-.mdot.t-ok .plate{stroke:var(--ok)}
-.mdot.t-warn .plate{stroke:var(--warn)}
-.mdot.t-bad .plate{stroke:var(--bad)}
-.mdot .flag{text-anchor:middle;dominant-baseline:central;pointer-events:none}
-.mdot:hover .plate,.mdot:focus-visible .plate{stroke-width:3}
-.mdot:focus-visible{outline:none}
+/* 亮点是纯色圆点，颜色即在线情况 */
+.mdot{cursor:pointer;stroke:var(--panel);stroke-width:2.5;transition:stroke-width .15s}
+.mdot.t-ok{fill:var(--ok)}
+.mdot.t-warn{fill:var(--warn)}
+.mdot.t-bad{fill:var(--bad)}
+.mdot:hover,.mdot:focus-visible{stroke-width:4;outline:none}
+.mdot:focus-visible{stroke:var(--fg)}
 .mpop .ph b{display:inline-flex;align-items:center;gap:5px}
 .mapfoot{margin-top:9px;padding-top:9px;border-top:1px solid var(--line-2);font-size:11px;color:var(--faint);
   display:flex;gap:6px 14px;flex-wrap:wrap;align-items:center}
@@ -152,15 +149,18 @@ main{padding:18px 0 64px}
 .search .clr{flex-shrink:0;color:var(--faint);font-size:16px;line-height:1;padding:0 1px}
 .search .clr:hover{color:var(--fg)}
 /* 工具栏里的分组控件与搜索框共用一套：等高、同圆角、同边框与阴影。
-   只作用于 .tools 内部——详情页面板里的 .seg 仍需保持紧凑。 */
-.tools .seg{margin-left:0;flex:0 1 auto;height:34px;padding:3px;border-radius:10px;
+   只作用于 .tools 内部——详情页面板里的 .seg 仍需保持紧凑。
+   margin-left:auto 让分组控件靠右，与左侧搜索框拉开，而不是紧贴其后留一大段空白。 */
+.tools .seg{margin-left:auto;flex:0 1 auto;height:34px;padding:3px;border-radius:10px;
   background:var(--panel);box-shadow:var(--sh-1);flex-wrap:wrap}
 .tools .seg button{font-size:12.5px;padding:0 12px;height:100%;border-radius:7px}
-/* 窄屏下分组控件独占一行、按钮等分，四个按钮不会挤出去。
+/* 窄屏：两者各占一行且**等宽**。搜索框必须去掉 max-width，
+   否则它会停在 360px 而分组控件占满整行，看起来就是「大小不一致」。
    注意 flex-basis 必须带单位——写 flex:1 1 100 是无效声明（只有 0 可省单位），
    整条会被丢弃，窄屏规则就永远不生效。 */
 @media(max-width:560px){
-  .tools .seg{flex:1 1 100%}
+  .tools .search{max-width:none;flex:1 1 100%}
+  .tools .seg{flex:1 1 100%;margin-left:0}
   .tools .seg button{flex:1 1 0;padding:0 6px}
 }
 
@@ -203,9 +203,11 @@ main{padding:18px 0 64px}
 .dot.pulse{animation:pulse 2.4s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .exp{font-size:11.5px;font-variant-numeric:var(--tnum);white-space:nowrap}
-.exp.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-weight:600;border:1px solid}
+/* 胶囊比普通文字大一号、加粗，才压得住卡片右侧的其它信息 */
+.exp.pill{display:inline-block;padding:1.5px 8px;border-radius:999px;font-weight:600;border:1px solid;font-size:12px}
 .exp.pill.bad{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 42%,transparent);background:color-mix(in srgb,var(--bad) 13%,transparent)}
 .exp.pill.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 42%,transparent);background:color-mix(in srgb,var(--warn) 13%,transparent)}
+.exp.pill.soon{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 26%,transparent);background:color-mix(in srgb,var(--warn) 7%,transparent);font-weight:550}
 
 /* ---------- 延迟检测块：每路探测一行，三网就有三行 ---------- */
 .latbox{margin-top:12px;padding:10px 11px 9px;border:1px solid var(--line-2);border-radius:var(--r-sm);
@@ -793,23 +795,24 @@ function countryChip(n){
     (f ? '<i class="fg">' + f + '</i>' : '') + esc(countryName(n.country)) + '</span>';
 }
 /**
- * 到期提示。临期与过期做成带底色的胶囊，而不是一行小字——
- * 这是最容易因为被忽略而真的出事的一条信息。
+ * 到期提示。这是最容易因为被忽略而真的出事的一条信息，所以做成带底色的胶囊，
+ * 而不是一行小字。阈值放到 30 天：只标 7 天的话，半个月后到期在列表里几乎看不见。
  */
+function expiryHTML(d, long){
+  if (d === null) return "";
+  var lv = d < 0 ? "bad" : d <= 7 ? "warn" : d <= 30 ? "soon" : "";
+  var text = d < 0 ? "已过期 " + (-d) + " 天"
+    : d <= 7 ? "仅剩 " + d + " 天"
+    : d + " 天后" + (long ? "到期" : "");
+  return lv ? '<span class="exp pill ' + lv + '">' + text + '</span>'
+    : '<span class="exp muted">' + text + '</span>';
+}
 function expiryText(n){
   var d = daysUntil(n.expires_at);
   if (d === null) return '<span class="exp faint" title="永不到期">' + FOREVER + '</span>';
-  if (d < 0) return '<span class="exp pill bad">已过期 ' + (-d) + ' 天</span>';
-  if (d <= 7) return '<span class="exp pill warn">仅剩 ' + d + ' 天</span>';
-  return '<span class="exp muted">' + d + ' 天后到期</span>';
+  return expiryHTML(d, true);
 }
-function expirySmall(n){
-  var d = daysUntil(n.expires_at);
-  if (d === null) return "";
-  if (d < 0) return '<span class="exp pill bad">已过期 ' + (-d) + ' 天</span>';
-  if (d <= 7) return '<span class="exp pill warn">仅剩 ' + d + ' 天</span>';
-  return '<span class="exp muted">' + d + ' 天后</span>';
-}
+function expirySmall(n){ return expiryHTML(daysUntil(n.expires_at), false); }
 /** 卡片上的占用条：标签、数值、细条各占一行，三列并排也放得下。
  *  `fill` 是该条在正常水位下的颜色（超过 75% / 90% 仍会转成告警色）。 */
 function meter(label, pct, foot, fill){
@@ -1014,7 +1017,7 @@ function regionTone(r){ return r.online === r.total ? "ok" : r.online === 0 ? "b
 
 function mapShellHTML(){
   return '<div class="mapbox" id="mapbox">' +
-    '<div class="maphead"><span>节点分布</span><span class="hint" id="maphint"></span></div>' +
+    '<div class="maphead"><span>节点分布</span></div>' +
     '<div class="mapwrap"><svg class="worldmap" viewBox="0 0 ' + MAP_W + ' ' + MAP_H + '" role="img" aria-label="节点分布世界地图">' +
       '<path class="land" d="' + mapLandPath() + '"/><g class="mdots"></g>' +
     '</svg></div>' +
@@ -1023,23 +1026,19 @@ function mapShellHTML(){
   '</div>';
 }
 /** 只更新亮点与页脚：陆地点阵有 1700 多个子路径，不能跟着每次筛选重建。 */
-function renderMapDots(shown, filtered){
+function renderMapDots(shown){
   var box = document.getElementById("mapbox");
   if (!box) return;
   var g = regionGroups(shown);
-  // 亮点 = 该地区国旗 + 一圈细线表示在线情况（全在线绿 / 部分橙 / 全离线红）
+  // 亮点是纯色圆点：颜色即在线情况。曾试过把地区国旗画上去，太小反而糊成一团。
   var dots = g.regions.map(function(r){
-    var rad = 8.5 + Math.min(r.total - 1, 3) * 1.2;
+    var rad = 6 + Math.min(r.total - 1, 3) * 1.1;
     var tip = r.label + " · " + r.total + " 个节点" + (r.online < r.total ? "，离线 " + (r.total - r.online) : "");
-    return '<g class="mdot t-' + regionTone(r) + '" data-act="dot" data-cc="' + r.cc + '" transform="translate(' +
-      mapX(r.lon).toFixed(1) + ',' + mapY(r.lat).toFixed(1) + ')" tabindex="0" role="button" aria-label="' + esc(tip) + '">' +
-      '<title>' + esc(tip) + '</title>' +
-      '<circle class="plate" r="' + rad.toFixed(1) + '"/>' +
-      '<text class="flag" font-size="' + (rad * 1.25).toFixed(1) + '">' + esc(r.flag || r.cc) + '</text>' +
-    '</g>';
+    return '<circle class="mdot t-' + regionTone(r) + '" data-act="dot" data-cc="' + r.cc + '" cx="' + mapX(r.lon).toFixed(1) +
+      '" cy="' + mapY(r.lat).toFixed(1) + '" r="' + rad.toFixed(1) + '" tabindex="0" role="button" ' +
+      'aria-label="' + esc(tip) + '"><title>' + esc(tip) + '</title></circle>';
   }).join("");
   box.querySelector(".mdots").innerHTML = dots;
-  document.getElementById("maphint").textContent = filtered ? "已按当前筛选" : "";
   document.getElementById("mapfoot").innerHTML =
     '<span class="lg o"><i></i>全部在线</span>' +
     '<span class="lg w"><i></i>部分离线</span>' +
@@ -1219,7 +1218,7 @@ function renderListBody(){
 
   var sum = document.getElementById("summary");
   if (sum) sum.innerHTML = tilesHTML(sorted);
-  renderMapDots(shown, !!list.q || list.group !== "none");
+  renderMapDots(shown);
 }
 
 /* ---------------- 详情页 ---------------- */

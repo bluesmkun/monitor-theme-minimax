@@ -141,6 +141,17 @@ eq(T.money(6, "XYZ"), "6.00 XYZ", "money：未知币种退回代码");
 eq(T.money(undefined, "CNY"), "—", "money(undefined)");
 eq(T.money(NaN, "CNY"), "—", "money(NaN)");
 
+/* 到期提示分级：过期红 / ≤7 橙 / 8–30 浅橙 / 其余灰字。阈值放 30 天是刻意的——
+   只标 7 天的话，半个月后到期在列表里几乎看不见。 */
+eq(T.expiryHTML(null, true), "", "expiryHTML：无到期日不渲染");
+eq(T.expiryHTML(-3, true), '<span class="exp pill bad">已过期 3 天</span>', "expiryHTML：过期走红色胶囊");
+eq(T.expiryHTML(0, true), '<span class="exp pill warn">仅剩 0 天</span>', "expiryHTML：当天算橙色胶囊");
+eq(T.expiryHTML(7, true), '<span class="exp pill warn">仅剩 7 天</span>', "expiryHTML：第 7 天仍是橙色");
+eq(T.expiryHTML(8, true), '<span class="exp pill soon">8 天后到期</span>', "expiryHTML：第 8 天降为浅橙");
+eq(T.expiryHTML(30, true), '<span class="exp pill soon">30 天后到期</span>', "expiryHTML：第 30 天仍是浅橙");
+eq(T.expiryHTML(31, true), '<span class="exp muted">31 天后到期</span>', "expiryHTML：第 31 天起只留灰字");
+eq(T.expiryHTML(31, false), '<span class="exp muted">31 天后</span>', "expiryHTML：短版不带「到期」二字");
+
 eq(T.esc('<b a="1">&</b>'), "&lt;b a=&quot;1&quot;&gt;&amp;&lt;/b&gt;", "esc：转义尖括号、引号与 &");
 eq(T.esc(null), "", "esc(null)");
 eq(T.esc(undefined), "", "esc(undefined)");

@@ -336,6 +336,30 @@ setTimeout(function(){
 }, 2000);
 </script></body>`);
     }
+    // 仅供预览：?probe=tools 报出工具栏里搜索框与分组控件的位置和尺寸，
+    // 用来判断「两者是否等高、是否对齐」。
+    if (url.searchParams.get("probe") === "tools") {
+      html = html.replace("</body>", `<script>
+setTimeout(function(){
+  var t = document.querySelector(".tools");
+  if (!t) { document.title = "NO TOOLS"; return; }
+  var out = ["tools w=" + Math.round(t.getBoundingClientRect().width)];
+  [".search", ".tools .seg"].forEach(function(sel){
+    var el = t.querySelector(sel.replace(".tools ", ""));
+    if (!el) { out.push(sel + "=缺失"); return; }
+    var r = el.getBoundingClientRect(), cs = getComputedStyle(el);
+    out.push(sel + " top=" + Math.round(r.top) + " left=" + Math.round(r.left) + " w=" + Math.round(r.width) +
+      " h=" + Math.round(r.height) + " radius=" + cs.borderTopLeftRadius + " right=" + Math.round(r.right));
+  });
+  var bs = t.querySelectorAll(".seg button");
+  if (bs.length) {
+    var b0 = bs[0].getBoundingClientRect();
+    out.push("首按钮 w=" + Math.round(b0.width) + " h=" + Math.round(b0.height) + " font=" + getComputedStyle(bs[0]).fontSize);
+  }
+  document.title = out.join(" | ");
+}, 1800);
+</script></body>`);
+    }
     // 仅供预览：?probe=table 报出探测表各单元格的横向位置，用来判断
     // 「某个元素出现后有没有把别的列挤走」。
     if (url.searchParams.get("probe") === "table") {
