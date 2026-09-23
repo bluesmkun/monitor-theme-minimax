@@ -109,6 +109,17 @@ const SPECS = [
     agent_version: "0.9.4", price: 0, currency: "CNY", billing_cycle: "",
     expires_at: null, traffic_limit: 10 * 1024 * GB, traffic_mode: "sum", traffic_reset_day: 0,
     latency: [82, 76, 95], loss: [0.2, 0, 0.6]
+  },
+  {
+    // 与 id=2 同在日本：用来验证「同一地区合并成一个亮点」以及
+    // 「部分离线 = 橙色」（JP 两个节点，一个在线一个离线）
+    id: 8, name: "日本 · 大阪", sort: 8, country: "JP", online: false,
+    os: "Debian GNU/Linux 12 (bookworm)", kernel: "6.1.0-23-amd64", arch: "x86_64", virt: "kvm",
+    cpu_name: "Intel(R) Xeon(R) E5-2680 v4 CPU @ 2.40GHz", cpu_cores: 2,
+    mem_total: 2 * GB, swap_total: 1 * GB, disk_total: 40 * GB,
+    agent_version: "0.9.1", price: 30, currency: "CNY", billing_cycle: "monthly",
+    expires_at: "2026-12-01", traffic_limit: 300 * GB, traffic_mode: "sum", traffic_reset_day: 1,
+    latency: [0, 0, 0], loss: [0, 0, 0]
   }
 ];
 
@@ -185,8 +196,8 @@ function allNodes() {
 }
 
 /* --------------------------------------------------------------- 历史数据 */
-// 三网探测。hub 的探测名字随样本下发（响应里的 probes），主题按 id 分组画线。
-const PROBES = { 1: "电信 163", 2: "联通 4837", 3: "移动 CMIN2" };
+// 三网探测 + 一路教育网。hub 的探测名字随样本下发（响应里的 probes），主题按 id 分组画线。
+const PROBES = { 1: "电信 163", 2: "联通 4837", 3: "移动 CMIN2", 4: "教育网 CERNET" };
 
 /** 历史指标点。按 hours 与 points 生成，points 只会让曲线更稀。 */
 function historyMetrics(id, hours, points) {
@@ -296,6 +307,30 @@ const server = http.createServer((req, res) => {
     // 没有可靠的办法去改 prefers-color-scheme）。
     if (url.searchParams.get("dark") === "1") {
       html = html.replace("<head>", '<head><script>try{localStorage.setItem("theme","dark")}catch(e){}</script>');
+    }
+    // 仅供预览：?q= / ?group= / ?popup= 直接把主界面的状态摆好，
+    // 用来在无头环境里截取筛选、分组、地图弹窗的样子。
+    // 主题脚本是普通 script，顶层 var 会挂到 window 上，所以这里能直接改。
+    const q = url.searchParams.get("q");
+    const group = url.searchParams.get("group");
+    const pop = url.searchParams.get("popup");
+    if (q !== null || group !== null || pop !== null) {
+      html = html.replace("</body>", `<script>
+setTimeout(function(){
+  try {
+    if (${JSON.stringify(q)} !== null) { list.q = ${JSON.stringify(q)}; var i = document.getElementById("q"); if (i) i.value = list.q; }
+    if (${JSON.stringify(group)} !== null) {
+      list.group = ${JSON.stringify(group)};
+      var bs = document.querySelectorAll('[data-act="group"]');
+      for (var k = 0; k < bs.length; k++) bs[k].classList.toggle("on", bs[k].getAttribute("data-mode") === list.group);
+    }
+    if (typeof renderListBody === "function") renderListBody();
+    var clr = document.querySelector('[data-act="clear-q"]');
+    if (clr) clr.hidden = !list.q;
+    if (${JSON.stringify(pop)} !== null) openRegionPopup(${JSON.stringify(pop)});
+  } catch (e) { document.title = "HOOK ERR " + e.message; }
+}, 2000);
+</script></body>`);
     }
     // 仅供预览：?probe=table 报出探测表各单元格的横向位置，用来判断
     // 「某个元素出现后有没有把别的列挤走」。

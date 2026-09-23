@@ -352,7 +352,68 @@ eq(T.median([4, 1, 3, 2]), 2.5, "median：偶数个取两中点的平均");
   eq(T.probeIndex(probes, 99), 0, "probeIndex：找不到时不返回 undefined");
 }
 
-/* ------------------------------------------------- 6. 地区与坐标轴 */
+/* ------------------------------- 7. 地图分组合并、搜索与分组 */
+{
+  const n = (over) => Object.assign({ id: 1, name: "香港 · CN2", country: "HK", online: true, os: "Debian GNU/Linux 12 (bookworm)", virt: "kvm", arch: "x86_64", billing_cycle: "monthly", metrics: null }, over);
+
+  eq(T.matchNode(n({}), ""), true, "matchNode：空关键词匹配全部");
+  eq(T.matchNode(n({}), "香港"), true, "matchNode：命中节点名");
+  eq(T.matchNode(n({}), "中国香港"), true, "matchNode：命中地区中文名");
+  eq(T.matchNode(n({}), "hk"), true, "matchNode：命中国家码，且大小写不敏感");
+  eq(T.matchNode(n({}), "debian"), true, "matchNode：命中系统名，大小写不敏感");
+  eq(T.matchNode(n({}), "kvm"), true, "matchNode：命中虚拟化");
+  eq(T.matchNode(n({}), "香港 kvm"), true, "matchNode：空格分词，全部命中才算匹配");
+  eq(T.matchNode(n({}), "香港 日本"), false, "matchNode：任一词不命中即不匹配");
+  eq(T.matchNode(n({}), "不存在的词"), false, "matchNode：完全不命中");
+  eq(T.matchNode(n({ country: "" }), "中国香港"), false, "matchNode：无地区码时不匹配地区名");
+
+  const all = [n({ id: 1, country: "HK" }), n({ id: 2, country: "JP" }), n({ id: 3, country: "JP" })];
+  ok(T.filterNodes(all, "") === all, "filterNodes：空关键词原样返回，不做无谓复制");
+  eq(T.filterNodes(all, "hk").length, 1, "filterNodes：按关键词筛出 1 个");
+  eq(T.filterNodes(all, "jp").length, 2, "filterNodes：按国家码筛出 2 个");
+
+  eq(T.groupNodes(all, "none").length, 1, "groupNodes：不分组时只有一组");
+  eq(T.groupNodes(all, "none")[0].count, 3, "groupNodes：不分组时该组含全部");
+  eq(T.groupNodes([], "none"), [], "groupNodes：空列表不产出空组");
+  const byRegion = T.groupNodes(all, "region");
+  eq(byRegion.length, 2, "groupNodes：按地区分成两组");
+  eq(byRegion[0].label, "日本", "groupNodes：组间按数量降序（日本 2 个在前）");
+  eq(byRegion[0].count, 2, "groupNodes：组内计数正确");
+  const byStatus = T.groupNodes([n({ online: true }), n({ id: 2, online: false })], "status");
+  eq(byStatus.length, 2, "groupNodes：按状态分成两组");
+  ok(byStatus.some((g) => g.label === "离线"), "groupNodes：离线组存在");
+  const byCycle = T.groupNodes([n({ billing_cycle: "monthly" }), n({ id: 2, billing_cycle: "" })], "cycle");
+  ok(byCycle.some((g) => g.label === "未设置计费周期"), "groupNodes：缺周期归到「未设置计费周期」");
+}
+
+{
+  const n = (over) => Object.assign({ id: 1, country: "JP", online: true }, over);
+  const r = T.regionGroups([n({}), n({ id: 2, online: false }), n({ id: 3, country: "HK" })]);
+  eq(r.regions.length, 2, "regionGroups：同一国家合并成一个地区");
+  const jp = r.regions.find((x) => x.cc === "JP");
+  eq(jp.total, 2, "regionGroups：合并后计数为 2");
+  eq(jp.online, 1, "regionGroups：在线计数为 1");
+  eq(jp.nodes.length, 2, "regionGroups：保留该地区的节点明细，供弹窗列出");
+  ok(Array.isArray(jp.lon) === false && typeof jp.lon === "number", "regionGroups：带出经度");
+  eq(r.unmapped, 0, "regionGroups：全部有地区码");
+
+  eq(T.regionTone({ online: 2, total: 2 }), "ok", "regionTone：全部在线为绿");
+  eq(T.regionTone({ online: 1, total: 2 }), "warn", "regionTone：部分离线为橙");
+  eq(T.regionTone({ online: 0, total: 2 }), "bad", "regionTone：全部离线为红");
+
+  const r2 = T.regionGroups([n({ country: "" }), n({ id: 2, country: "ZZ" }), n({ id: 3, country: "hk" })]);
+  eq(r2.regions.length, 1, "regionGroups：无地区码与未知码都不上图");
+  eq(r2.unmapped, 2, "regionGroups：未上图的两个被单独计数");
+  eq(r2.regions[0].cc, "HK", "regionGroups：小写地区码归一成大写");
+
+  const map = T.MAPDATA;
+  eq(map.land.length, map.rows, "MAPDATA：点阵行数与 rows 一致");
+  ok(map.land.every((row) => row.length === Math.ceil(map.cols / 4)), "MAPDATA：每行字符数等于 cols/4");
+  ok(Object.keys(map.cc).length > 150, "MAPDATA：国家质心表覆盖足够多");
+  ok(map.latMin < 0 && map.latMax > 0, "MAPDATA：纬度范围跨赤道");
+}
+
+/* ------------------------------------------------- 8. 地区与坐标轴 */
 eq(T.countryName("hk"), "中国香港", "countryName：小写也能认");
 eq(T.countryName("TW"), "中国台湾", "countryName：台湾是中国的一部分");
 eq(T.countryName("mo"), "中国澳门", "countryName：澳门是中国的一部分");
