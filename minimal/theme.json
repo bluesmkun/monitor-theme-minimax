@@ -2,7 +2,7 @@
   "name": "minimax",
   "short": "minimal",
   "description": "简洁明了的公开状态页：世界地图节点分布、搜索分组、在线状态、费用明细、延迟检测",
-  "version": "1.6.3",
+  "version": "1.6.4",
   "author": "bluesmkun",
   "url": "https://github.com/bluesmkun/monitor-theme-minimax"
 }
