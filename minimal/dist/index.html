@@ -59,7 +59,8 @@ h1,h2,h3,h4,p{margin:0}
 /* ---------- header ---------- */
 header.top{position:sticky;top:0;z-index:20;background:var(--bg-a);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
 .top-in{display:flex;align-items:center;gap:10px;height:52px}
-.brand{display:flex;align-items:center;gap:9px;font-weight:650;font-size:15px;letter-spacing:-.1px;transition:opacity .15s}
+.brand{display:flex;align-items:center;gap:9px;font-weight:650;font-size:15px;letter-spacing:-.1px;margin-right:auto;transition:opacity .15s}
+.hd-actions{margin-left:auto;display:inline-flex;align-items:center;gap:8px;flex-shrink:0}
 .brand:hover{opacity:.7}
 .brand .mark{width:13px;height:13px;border-radius:50%;background:linear-gradient(140deg,var(--ok),color-mix(in srgb,var(--ok) 55%,var(--c4)));box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 18%,transparent)}
 .spacer{flex:1}
@@ -74,11 +75,12 @@ main{padding:18px 0 64px}
 
 /* ---------- summary ---------- */
 /* ---------- 顶部：磁贴靠左 + 右侧世界地图 ---------- */
-.top{display:grid;grid-template-columns:1fr;gap:13px;margin-bottom:16px}
+/* 类名不能叫 .top——头部 <header class="top"> 已占用，撞车会互相污染 */
+.overview{display:grid;grid-template-columns:1fr;gap:13px;margin-bottom:16px}
 /* 宽屏下磁贴竖成一列：2×2 会把每个磁贴拉得过高、留白多，而地图正需要更大的面积 */
 @media(min-width:1040px){
-  .top{grid-template-columns:minmax(0,.62fr) minmax(0,1.55fr);align-items:stretch}
-  .top .summary{grid-template-columns:1fr}
+  .overview{grid-template-columns:minmax(0,.62fr) minmax(0,1.55fr);align-items:stretch}
+  .overview .summary{grid-template-columns:1fr}
 }
 .summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;margin-bottom:0}
 /* 汇总磁贴：顶部一道彩色细条 + 同色的小圆点，四个磁贴各有自己的色相，
@@ -107,12 +109,17 @@ main{padding:18px 0 64px}
 .mapwrap{flex:1;display:flex;align-items:center;min-height:150px}
 .worldmap{display:block;width:100%;height:auto;overflow:visible}
 .worldmap .land{fill:var(--map-land)}
-.mdot{cursor:pointer;stroke:var(--panel);stroke-width:2.5;transition:stroke-width .15s}
-.mdot.t-ok{fill:var(--ok)}
-.mdot.t-warn{fill:var(--warn)}
-.mdot.t-bad{fill:var(--bad)}
-.mdot:hover,.mdot:focus-visible{stroke-width:4;outline:none}
-.mdot:focus-visible{stroke:var(--fg)}
+/* 亮点 = 一枚国旗 + 一圈细线；线的颜色表示在线情况，国旗本身不染色，
+   这样「哪国」和「状态」是两条互不相扰的信息。 */
+.mdot{cursor:pointer}
+.mdot .plate{fill:var(--panel);stroke-width:1.6;transition:stroke-width .15s}
+.mdot.t-ok .plate{stroke:var(--ok)}
+.mdot.t-warn .plate{stroke:var(--warn)}
+.mdot.t-bad .plate{stroke:var(--bad)}
+.mdot .flag{text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.mdot:hover .plate,.mdot:focus-visible .plate{stroke-width:3}
+.mdot:focus-visible{outline:none}
+.mpop .ph b{display:inline-flex;align-items:center;gap:5px}
 .mapfoot{margin-top:9px;padding-top:9px;border-top:1px solid var(--line-2);font-size:11px;color:var(--faint);
   display:flex;gap:6px 14px;flex-wrap:wrap;align-items:center}
 .mapfoot .lg{display:inline-flex;align-items:center;gap:5px}
@@ -144,7 +151,18 @@ main{padding:18px 0 64px}
 .search input::placeholder{color:var(--faint)}
 .search .clr{flex-shrink:0;color:var(--faint);font-size:16px;line-height:1;padding:0 1px}
 .search .clr:hover{color:var(--fg)}
-.tools .count{font-size:12px;color:var(--muted);margin-left:auto;white-space:nowrap}
+/* 工具栏里的分组控件与搜索框共用一套：等高、同圆角、同边框与阴影。
+   只作用于 .tools 内部——详情页面板里的 .seg 仍需保持紧凑。 */
+.tools .seg{margin-left:0;flex:0 1 auto;height:34px;padding:3px;border-radius:10px;
+  background:var(--panel);box-shadow:var(--sh-1);flex-wrap:wrap}
+.tools .seg button{font-size:12.5px;padding:0 12px;height:100%;border-radius:7px}
+/* 窄屏下分组控件独占一行、按钮等分，四个按钮不会挤出去。
+   注意 flex-basis 必须带单位——写 flex:1 1 100 是无效声明（只有 0 可省单位），
+   整条会被丢弃，窄屏规则就永远不生效。 */
+@media(max-width:560px){
+  .tools .seg{flex:1 1 100%}
+  .tools .seg button{flex:1 1 0;padding:0 6px}
+}
 
 /* ---------- 分组标题 ---------- */
 .ghead{display:flex;align-items:center;gap:9px;margin:20px 0 11px;font-size:12.5px;color:var(--muted)}
@@ -178,12 +196,16 @@ main{padding:18px 0 64px}
 /* 在线时给状态徽标上一层淡绿底，卡片头部因此有了色彩落点 */
 .chip.live{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 34%,var(--line));background:color-mix(in srgb,var(--ok) 9%,transparent)}
 .chip.warn{border-color:color-mix(in srgb,var(--warn) 34%,var(--line));background:color-mix(in srgb,var(--warn) 9%,transparent)}
+.fg{font-style:normal;font-size:13px;line-height:1;flex-shrink:0}
 .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);flex-shrink:0}
 .dot.off{background:var(--faint)}
 .dot.pending{background:var(--warn)}
 .dot.pulse{animation:pulse 2.4s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .exp{font-size:11.5px;font-variant-numeric:var(--tnum);white-space:nowrap}
+.exp.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-weight:600;border:1px solid}
+.exp.pill.bad{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 42%,transparent);background:color-mix(in srgb,var(--bad) 13%,transparent)}
+.exp.pill.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 42%,transparent);background:color-mix(in srgb,var(--warn) 13%,transparent)}
 
 /* ---------- 延迟检测块：每路探测一行，三网就有三行 ---------- */
 .latbox{margin-top:12px;padding:10px 11px 9px;border:1px solid var(--line-2);border-radius:var(--r-sm);
@@ -426,6 +448,15 @@ function countryName(code){
   if (!code) return "";
   var k = String(code).toUpperCase();
   return COUNTRY[k] || k;
+}
+/**
+ * ISO 3166-1 alpha-2 → 区旗。用两个区域指示符拼出来，不必维护一张表。
+ * 已知限制：Windows 的字体不渲染国旗 emoji，会退化成两个字母（如 JP），仍可读。
+ */
+function flagOf(code){
+  if (!code || !/^[A-Za-z]{2}$/.test(code)) return "";
+  var c = code.toUpperCase();
+  return String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65, 0x1F1E6 + c.charCodeAt(1) - 65);
 }
 var FOREVER = "\u221E";
 
@@ -757,13 +788,27 @@ function statusChip(n){
 }
 function countryChip(n){
   if (!n.country) return "";
-  return '<span class="chip" title="' + esc(String(n.country).toUpperCase()) + '">' + esc(countryName(n.country)) + '</span>';
+  var f = flagOf(n.country);
+  return '<span class="chip" title="' + esc(String(n.country).toUpperCase()) + '">' +
+    (f ? '<i class="fg">' + f + '</i>' : '') + esc(countryName(n.country)) + '</span>';
 }
+/**
+ * 到期提示。临期与过期做成带底色的胶囊，而不是一行小字——
+ * 这是最容易因为被忽略而真的出事的一条信息。
+ */
 function expiryText(n){
   var d = daysUntil(n.expires_at);
   if (d === null) return '<span class="exp faint" title="永不到期">' + FOREVER + '</span>';
-  var cls = d < 0 ? "bad" : d <= 7 ? "warn" : "muted";
-  return '<span class="exp ' + cls + '">' + (d < 0 ? "已过期 " + (-d) + " 天" : d + " 天后到期") + '</span>';
+  if (d < 0) return '<span class="exp pill bad">已过期 ' + (-d) + ' 天</span>';
+  if (d <= 7) return '<span class="exp pill warn">仅剩 ' + d + ' 天</span>';
+  return '<span class="exp muted">' + d + ' 天后到期</span>';
+}
+function expirySmall(n){
+  var d = daysUntil(n.expires_at);
+  if (d === null) return "";
+  if (d < 0) return '<span class="exp pill bad">已过期 ' + (-d) + ' 天</span>';
+  if (d <= 7) return '<span class="exp pill warn">仅剩 ' + d + ' 天</span>';
+  return '<span class="exp muted">' + d + ' 天后</span>';
 }
 /** 卡片上的占用条：标签、数值、细条各占一行，三列并排也放得下。
  *  `fill` 是该条在正常水位下的颜色（超过 75% / 90% 仍会转成告警色）。 */
@@ -955,7 +1000,7 @@ function regionGroups(nodes){
     var pt = cc && MAPDATA.cc[cc];
     if (!pt){ unmapped++; return; }
     if (!by[cc]){
-      by[cc] = { cc: cc, label: countryName(cc), lon: pt[0], lat: pt[1], total: 0, online: 0, nodes: [] };
+      by[cc] = { cc: cc, label: countryName(cc), flag: flagOf(cc), lon: pt[0], lat: pt[1], total: 0, online: 0, nodes: [] };
       order.push(cc);
     }
     by[cc].total++;
@@ -982,12 +1027,16 @@ function renderMapDots(shown, filtered){
   var box = document.getElementById("mapbox");
   if (!box) return;
   var g = regionGroups(shown);
+  // 亮点 = 该地区国旗 + 一圈细线表示在线情况（全在线绿 / 部分橙 / 全离线红）
   var dots = g.regions.map(function(r){
-    var rad = 6 + Math.min(r.total - 1, 3) * 1.1;
+    var rad = 8.5 + Math.min(r.total - 1, 3) * 1.2;
     var tip = r.label + " · " + r.total + " 个节点" + (r.online < r.total ? "，离线 " + (r.total - r.online) : "");
-    return '<circle class="mdot t-' + regionTone(r) + '" data-act="dot" data-cc="' + r.cc + '" cx="' + mapX(r.lon).toFixed(1) +
-      '" cy="' + mapY(r.lat).toFixed(1) + '" r="' + rad.toFixed(1) + '" tabindex="0" role="button" ' +
-      'aria-label="' + esc(tip) + '"><title>' + esc(tip) + '</title></circle>';
+    return '<g class="mdot t-' + regionTone(r) + '" data-act="dot" data-cc="' + r.cc + '" transform="translate(' +
+      mapX(r.lon).toFixed(1) + ',' + mapY(r.lat).toFixed(1) + ')" tabindex="0" role="button" aria-label="' + esc(tip) + '">' +
+      '<title>' + esc(tip) + '</title>' +
+      '<circle class="plate" r="' + rad.toFixed(1) + '"/>' +
+      '<text class="flag" font-size="' + (rad * 1.25).toFixed(1) + '">' + esc(r.flag || r.cc) + '</text>' +
+    '</g>';
   }).join("");
   box.querySelector(".mdots").innerHTML = dots;
   document.getElementById("maphint").textContent = filtered ? "已按当前筛选" : "";
@@ -1006,28 +1055,55 @@ function renderMapDots(shown, filtered){
 }
 
 /* ==================== 地区弹窗 ==================== */
-var popup = { cc: null };
+var popup = { cc: null, sig: "" };
 function closePopup(){
   popup.cc = null;
+  popup.sig = "";
   var el = document.getElementById("mpop");
   if (el){ el.hidden = true; el.innerHTML = ""; }
 }
+/** 弹窗内容的指纹：地区、在线数、各节点的状态。用来判断有没有必要重建。 */
+function popupSig(cc){
+  var g = regionGroups(filterNodes(sortedNodes(), list.q));
+  var r = null;
+  g.regions.forEach(function(x){ if (x.cc === cc) r = x; });
+  if (!r) return null;
+  return r.cc + "|" + r.online + "|" + r.nodes.map(function(n){ return n.id + ":" + nodeState(n); }).join(",");
+}
+/** 把弹窗贴到亮点下方并夹在容器内。地图是等比缩放的 SVG，只能按屏幕坐标定位。 */
+function placePopup(box, el, dot){
+  var br = box.getBoundingClientRect(), dr = dot.getBoundingClientRect();
+  var w = el.offsetWidth, h = el.offsetHeight;
+  var left = dr.left - br.left + dr.width / 2 - w / 2;
+  el.style.left = Math.max(8, Math.min(left, br.width - w - 8)) + "px";
+  var top = dr.bottom - br.top + 8;
+  if (top + h > br.height - 6) top = Math.max(6, dr.top - br.top - h - 8);
+  el.style.top = top + "px";
+}
 /**
- * 打开某地区的节点选择。`keep` 表示这是地图重画后的重定位，不改选中态。
- * 定位用亮点自身的 getBoundingClientRect，并夹在容器内——地图是等比缩放的 SVG，
- * 直接按 viewBox 坐标算屏幕位置会在缩放后对不上。
+ * 打开某地区的节点选择。
+ * `keep` 表示这是地图重画后的续命调用：内容没变就只重新定位，**不重建 DOM**——
+ * 每 2 秒一次的推送若把弹窗重建，用户正要点的那个按钮会被换掉，点击就落空了。
  */
 function openRegionPopup(cc, keep){
   var box = document.getElementById("mapbox");
   var el = document.getElementById("mpop");
   var dot = box && box.querySelector('.mdot[data-cc="' + cc + '"]');
   if (!box || !el || !dot){ closePopup(); return; }
+  var sig = popupSig(cc);
+  if (sig === null){ closePopup(); return; }
+
+  if (keep && popup.cc === cc && popup.sig === sig && !el.hidden){
+    placePopup(box, el, dot);
+    return;
+  }
   var g = regionGroups(filterNodes(sortedNodes(), list.q));
   var r = null;
   g.regions.forEach(function(x){ if (x.cc === cc) r = x; });
-  if (!r){ closePopup(); return; }
   popup.cc = cc;
-  el.innerHTML = '<div class="ph"><b>' + esc(r.label) + '</b><span>' + r.total + ' 个 · 在线 ' + r.online + '</span></div>' +
+  popup.sig = sig;
+  el.innerHTML = '<div class="ph"><b>' + (r.flag ? '<i class="fg">' + r.flag + '</i>' : '') + esc(r.label) +
+    '</b><span>' + r.total + ' 个 · 在线 ' + r.online + '</span></div>' +
     r.nodes.map(function(n){
       var st = nodeState(n);
       return '<button class="pn" data-act="open-node" data-id="' + n.id + '">' +
@@ -1036,13 +1112,7 @@ function openRegionPopup(cc, keep){
         '<span class="r2">' + esc(statusLabel(n)) + ' · ' + esc(subLine(n)) + '</span></button>';
     }).join("");
   el.hidden = false;
-  var br = box.getBoundingClientRect(), dr = dot.getBoundingClientRect();
-  var w = el.offsetWidth, h = el.offsetHeight;
-  var left = dr.left - br.left + dr.width / 2 - w / 2;
-  el.style.left = Math.max(8, Math.min(left, br.width - w - 8)) + "px";
-  var top = dr.bottom - br.top + 8;
-  if (top + h > br.height - 6) top = Math.max(6, dr.top - br.top - h - 8);
-  el.style.top = top + "px";
+  placePopup(box, el, dot);
 }
 
 /* ==================== 搜索与分组 ==================== */
@@ -1066,18 +1136,21 @@ function groupNodes(nodes, mode){
   if (mode === "none") return nodes.length ? [{ key: "", label: "", count: nodes.length, nodes: nodes }] : [];
   var by = {}, order = [];
   nodes.forEach(function(n){
-    var k, label;
+    var k, label, flag;
     if (mode === "region"){
       k = String(n.country || "").toUpperCase() || "__none";
       label = k === "__none" ? "未标注地区" : countryName(k);
+      flag = k === "__none" ? "" : flagOf(k);
     } else if (mode === "status"){
       k = nodeState(n);
       label = k === "online" ? "在线" : k === "pending" ? "已连接未上报" : "离线";
+      flag = "";
     } else {
       k = n.billing_cycle || "__none";
       label = n.billing_cycle ? cycleLabel(n.billing_cycle) : "未设置计费周期";
+      flag = "";
     }
-    if (!by[k]){ by[k] = { key: k, label: label, count: 0, nodes: [] }; order.push(k); }
+    if (!by[k]){ by[k] = { key: k, label: label, flag: flag, count: 0, nodes: [] }; order.push(k); }
     by[k].count++;
     by[k].nodes.push(n);
   });
@@ -1099,7 +1172,6 @@ function toolsHTML(){
     '<span class="seg" id="groupseg">' + GROUP_MODES.map(function(m){
       return '<button data-act="group" data-mode="' + m.key + '"' + (list.group === m.key ? ' class="on"' : '') + '>' + m.label + '</button>';
     }).join("") + '</span>' +
-    '<span class="count" id="count"></span>' +
   '</div>';
 }
 
@@ -1115,7 +1187,7 @@ function renderList(){
       : '<div class="alert">' + esc(state.error) + '<button data-act="reload">重试</button></div>';
   }
   app.innerHTML = '<div class="wrap">' + alert +
-    '<div class="top"><div class="summary" id="summary">' + tilesHTML(sorted) + '</div>' + mapShellHTML() + '</div>' +
+    '<div class="overview"><div class="summary" id="summary">' + tilesHTML(sorted) + '</div>' + mapShellHTML() + '</div>' +
     toolsHTML() + '<div id="grid"></div></div>';
   renderListBody();
 }
@@ -1138,7 +1210,8 @@ function renderListBody(){
         '<button data-act="clear-q" style="text-decoration:underline">清空搜索</button></p>';
     } else {
       grid.innerHTML = groups.map(function(g){
-        return (g.label ? '<div class="ghead"><b>' + esc(g.label) + '</b><span class="n">' + g.count + '</span></div>' : '') +
+        return (g.label ? '<div class="ghead">' + (g.flag ? '<i class="fg">' + g.flag + '</i>' : '') +
+          '<b>' + esc(g.label) + '</b><span class="n">' + g.count + '</span></div>' : '') +
           '<div class="grid">' + g.nodes.map(nodeCard).join("") + '</div>';
       }).join("");
     }
@@ -1147,13 +1220,6 @@ function renderListBody(){
   var sum = document.getElementById("summary");
   if (sum) sum.innerHTML = tilesHTML(sorted);
   renderMapDots(shown, !!list.q || list.group !== "none");
-
-  var cnt = document.getElementById("count");
-  if (cnt){
-    cnt.textContent = (list.q || list.group !== "none")
-      ? shown.length + " / " + sorted.length + " 个节点"
-      : sorted.length + " 个节点";
-  }
 }
 
 /* ---------------- 详情页 ---------------- */
@@ -1194,8 +1260,7 @@ function costPanel(n){
       '</div></div>' +
       '<div class="item"><div class="k">折合月均</div><div class="v">' + (mc != null ? esc(money(mc, n.currency)) : "—") + '</div></div>' +
       '<div class="item"><div class="k">到期时间</div><div class="v">' + esc(dateStr(n.expires_at)) +
-        (days != null ? '<small class="' + (days < 0 ? "bad" : days <= 7 ? "warn" : "") + '">' +
-          (days < 0 ? "已过期 " + (-days) + " 天" : days + " 天后") + '</small>' : "") + '</div></div>' +
+        (days != null ? ' ' + expirySmall(n) : '') + '</div></div>' +
       '<div class="item"><div class="k">计费模式</div><div class="v">' + esc(modeLabel(n.traffic_mode)) + '</div></div>' +
     '</div>' +
     '<div class="traffic"><div class="trow"><span class="muted">本月流量（' + esc(modeLabel(n.traffic_mode)) + '）</span>' +
@@ -1577,13 +1642,15 @@ function toggleTheme(){
 function headerHTML(){
   var me = state.me || {};
   return '<header class="top"><div class="wrap"><div class="top-in">' +
+    // 站点名靠左、右侧按钮组靠右：用 margin-right:auto 顶开，比塞一个 spacer 元素更明确
     '<button class="brand" data-act="home"><span class="mark"></span>' + esc(me.site_name || "探针") + '</button>' +
-    '<span class="spacer"></span>' +
-    '<a class="iconbtn" href="/admin/">' + esc(me.authed ? "进入后台" : "登录") + '</a>' +
-    '<button class="iconbtn only" data-act="toggle-theme" title="切换深浅色">' +
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">' +
-      '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>' +
-    '</button>' +
+    '<span class="hd-actions">' +
+      '<a class="iconbtn" href="/admin/">' + esc(me.authed ? "进入后台" : "登录") + '</a>' +
+      '<button class="iconbtn only" data-act="toggle-theme" title="切换深浅色">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">' +
+        '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>' +
+      '</button>' +
+    '</span>' +
   '</div></div></header>';
 }
 function shell(){

@@ -80,7 +80,9 @@ const SPECS = [
     cpu_name: "Intel(R) Xeon(R) E5-2696 v4 CPU @ 2.20GHz", cpu_cores: 2,
     mem_total: 4 * GB, swap_total: 1 * GB, disk_total: 60 * GB,
     agent_version: "0.9.4", price: 26, currency: "USD", billing_cycle: "semiannual",
-    expires_at: "2027-01-08", traffic_limit: 2 * 1024 * GB, traffic_mode: "sum", traffic_reset_day: 1,
+    // 临近到期：用来验证「仅剩 N 天」的橙色胶囊（相对今天的几天后）
+    expires_at: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10),
+    traffic_limit: 2 * 1024 * GB, traffic_mode: "sum", traffic_reset_day: 1,
     latency: [158, 172, 205], loss: [1.6, 2.4, 3.2]
   },
   {
@@ -118,7 +120,9 @@ const SPECS = [
     cpu_name: "Intel(R) Xeon(R) E5-2680 v4 CPU @ 2.40GHz", cpu_cores: 2,
     mem_total: 2 * GB, swap_total: 1 * GB, disk_total: 40 * GB,
     agent_version: "0.9.1", price: 30, currency: "CNY", billing_cycle: "monthly",
-    expires_at: "2026-12-01", traffic_limit: 300 * GB, traffic_mode: "sum", traffic_reset_day: 1,
+    // 已过期：用来验证「已过期 N 天」的红色胶囊
+    expires_at: new Date(Date.now() - 8 * 86400000).toISOString().slice(0, 10),
+    traffic_limit: 300 * GB, traffic_mode: "sum", traffic_reset_day: 1,
     latency: [0, 0, 0], loss: [0, 0, 0]
   }
 ];

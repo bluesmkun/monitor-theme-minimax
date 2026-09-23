@@ -421,6 +421,18 @@ eq(T.countryName("ZZ"), "ZZ", "countryName：未收录的代码原样显示");
 eq(T.countryName(""), "", "countryName：空值");
 
 {
+  // 国旗由两个区域指示符拼出，不必维护表
+  eq(T.flagOf("HK"), String.fromCodePoint(0x1F1ED, 0x1F1F0), "flagOf：HK 拼成对应区旗");
+  eq(T.flagOf("hk"), T.flagOf("HK"), "flagOf：大小写不敏感");
+  eq(T.flagOf("JP") === T.flagOf("HK"), false, "flagOf：不同国家旗不同");
+  eq(T.flagOf(""), "", "flagOf：空值返回空串");
+  eq(T.flagOf("A"), "", "flagOf：单字母不成立");
+  eq(T.flagOf("ABC"), "", "flagOf：三字母不成立");
+  eq(T.flagOf("1A"), "", "flagOf：非字母不成立");
+  ok(T.flagOf("US").length === 4, "flagOf：两个码点各占两个 UTF-16 单元");
+}
+
+{
   // 三网并排，前三路的颜色必须互不相同且都不是告警色（绿/红留给在线与告警语义）。
   const five = [0, 1, 2, 3, 4].map(T.probeColor);
   eq(new Set(five).size, 5, "probeColor：前五路各不相同");
