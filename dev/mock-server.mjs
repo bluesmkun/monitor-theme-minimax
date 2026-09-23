@@ -392,6 +392,12 @@ setTimeout(function(){
   var cr = card.getBoundingClientRect();
   var cs = getComputedStyle(card);
   var out = ["card right=" + Math.round(cr.right) + " paddingR=" + cs.paddingRight];
+  [".overview", ".summary", ".mapbox", ".mapwrap", ".mapwrap svg", ".card"].forEach(function(sel){
+    var el = document.querySelector(sel);
+    if (!el) { out.push(sel + "=缺失"); return; }
+    var r = el.getBoundingClientRect();
+    out.push(sel + " w=" + Math.round(r.width) + " h=" + Math.round(r.height));
+  });
   [".price", ".crow", ".rates", ".crow.small"].forEach(function(sel){
     var el = card.querySelector(sel);
     if (!el) { out.push(sel + "=缺失"); return; }

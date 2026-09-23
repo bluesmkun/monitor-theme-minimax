@@ -216,10 +216,18 @@ if (inject) {
   const themePath = path.resolve(ROOT, inject);
   const theme = fs.readFileSync(themePath, "utf8");
   const MARK = "/* @MAPDATA@ */";
-  if (!theme.includes(MARK)) throw new Error(themePath + " 里找不到 " + MARK);
   const snippet = "var MAPDATA=" + JSON.stringify(out) + ";";
-  fs.writeFileSync(themePath, theme.replace(MARK, snippet));
-  console.log("已注入 " + path.relative(ROOT, themePath) + "（" + (snippet.length / 1024).toFixed(1) + " KB）");
+  // 幂等：首次注入替占位标记，之后替已有的那一行。数据是单行的，按行匹配即可。
+  // 只认占位标记的话，第二次执行就会报「找不到标记」，没法改网格参数重生成。
+  if (theme.includes(MARK)) {
+    fs.writeFileSync(themePath, theme.replace(MARK, snippet));
+    console.log("已注入 " + path.relative(ROOT, themePath) + "（" + (snippet.length / 1024).toFixed(1) + " KB）");
+  } else if (/^var MAPDATA=.*$/m.test(theme)) {
+    fs.writeFileSync(themePath, theme.replace(/^var MAPDATA=.*$/m, snippet));
+    console.log("已更新 " + path.relative(ROOT, themePath) + "（" + (snippet.length / 1024).toFixed(1) + " KB）");
+  } else {
+    throw new Error(themePath + " 里既没有 " + MARK + " 也没有 var MAPDATA=，无从注入");
+  }
 }
 
 console.log("抽查：HK=" + JSON.stringify(cc.HK) + " SG=" + JSON.stringify(cc.SG) + " US=" + JSON.stringify(cc.US) + " JP=" + JSON.stringify(cc.JP));
