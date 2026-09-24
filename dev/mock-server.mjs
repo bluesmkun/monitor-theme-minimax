@@ -37,6 +37,14 @@ const NOWS = process.argv.includes("--nows");
 // /api/nodes 一律 401、/api/me 改口 public_page=false，用来验证主题会重查 /me 并
 // 把访客送去后台，而不是停在一个不再更新的列表上。/admin/ 给一个可辨认的占位页。
 const CLOSED = process.argv.includes("--closed");
+// --delay-ping <ms>：把延迟曲线的响应压后。本地假后端太快，加载态一闪而过，
+// 想截「波线还没到」的骨架/固定行区就必须人为拖慢。
+const argDelay = process.argv.indexOf("--delay-ping");
+const DELAY_PING = argDelay > -1 ? Number(process.argv[argDelay + 1]) || 0 : 0;
+// --fail-ping：延迟曲线一律 500。用来验证「取不到数据」时的界面（骨架行 + 固定行区）
+// 以及客户端会不会按短周期重试。比 --delay-ping 更好用——请求会正常结束，
+// 无头浏览器的虚拟时间不会被挂住的请求卡死。
+const FAIL_PING = process.argv.includes("--fail-ping");
 // 用时间而不是调用次数翻转：次数会被任何一次 curl 消耗掉，结果不可复现。
 const startedMs = Date.now();
 
@@ -297,8 +305,15 @@ const server = http.createServer((req, res) => {
     const points = Number(url.searchParams.get("points") || 600);
     const series = url.searchParams.get("series") || "metrics";
     const out = {};
+    // --fail-ping 下把每次请求打上时间戳，方便核对客户端是不是按 6s→12s→24s 的
+    // 指数退避重试，而不是傻等一分钟。
+    if (series === "ping" && FAIL_PING) {
+      console.log("ping#" + id + " " + new Date().toISOString().slice(11, 23) + " -> 500");
+      return json(res, { error: "ping unavailable" }, 500);
+    }
     if (series !== "ping") out.metrics = historyMetrics(id, hours, points);
     if (series !== "metrics") Object.assign(out, historyPing(id, hours, points));
+    if (series === "ping" && DELAY_PING) return void setTimeout(() => json(res, out), DELAY_PING);
     return json(res, out);
   }
   if (p.startsWith("/api/")) return json(res, { error: "not found" }, 404);
@@ -410,6 +425,29 @@ setTimeout(function(){
 }, 1500);
 </script></body>`);
     }
+    // 仅供预览：?probe=lat 量延迟检测块的行区几何，确认「行高固定」——
+    // 骨架态 / 数据态 / 离线卡片，.latbox 与 .latrows 的高度必须一致。
+    // 配合 --delay-ping 就能量到「数据还没到」时的样子。
+    if (url.searchParams.get("probe") === "lat") {
+      html = html.replace("</body>", `<script>
+setTimeout(function(){
+  var cards = document.querySelectorAll(".card");
+  if (!cards.length) { document.title = "NO CARD"; return; }
+  var out = [];
+  [].forEach.call(cards, function(c){
+    var box = c.querySelector(".latbox"), rows = c.querySelector(".latrows");
+    var nm = c.querySelector(".nname");
+    out.push((nm ? nm.textContent : "?") +
+      " box=" + (box ? Math.round(box.getBoundingClientRect().height) : "无") +
+      " rows=" + (rows ? Math.round(rows.getBoundingClientRect().height) : "无") +
+      " n=" + c.querySelectorAll(".latrow").length +
+      (c.querySelector(".latrow.sk") ? " 骨架" : "") +
+      (c.querySelector(".latrow.solo") ? " 单行" : ""));
+  });
+  document.title = out.join(" | ");
+}, 3000);
+</script></body>`);
+    }
     // 仅供预览：?click=smooth,base2 —— 渲染完成后依次点击，用来在无头环境里
     // 截取交互后的状态（按钮、图例选中态），省得为了看一眼去装整套浏览器自动化。
     const clicks = url.searchParams.get("click");
@@ -470,13 +508,16 @@ server.on("upgrade", (req, socket) => {
     if (socket.destroyed) return;
     try { socket.write(frame(JSON.stringify({ nodes: allNodes() }))); } catch { /* 客户端已断开 */ }
   };
-  push();
-  if (FREEZE) return;
-  const timer = setInterval(push, 2000);
-  const bye = () => { clearInterval(timer); socket.destroy(); };
+  // 客户端随时可能直接断开（无头浏览器退出是最常见的）。先挂上 close/error 兜底再推数据，
+  // 否则 --freeze 路径下根本没有 error 监听，一次 ECONNRESET 就会把整个预览服务带走。
+  let timer = null;
+  const bye = () => { if (timer) clearInterval(timer); socket.destroy(); };
   socket.on("close", bye);
   socket.on("error", bye);
   socket.on("data", () => {}); // 客户端不会发消息，读掉即可
+  push();
+  if (FREEZE) return;
+  timer = setInterval(push, 2000);
 });
 
 server.listen(PORT, "127.0.0.1", () => {

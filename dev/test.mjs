@@ -282,6 +282,35 @@ eq(T.pingSummary({ ping: [] }).probes, [], "pingSummary：空样本");
     "spark：全等值时量程为 0，要兜底而不是除零");
 }
 
+{
+  // 平滑曲线（本次改动）：穿过每个采样点、只在拐角抹圆，不再输出折线段。
+  const d = T.smoothPath([[0, 10], [10, 10], [20, 10]]);
+  eq(d.indexOf("L"), -1, "smoothPath：全是贝塞尔，没有折线段");
+  eq((d.match(/C/g) || []).length, 2, "smoothPath：n 个点连成 n-1 段三次贝塞尔");
+  eq(T.smoothPath([[0, 1]]), "M0.0 1.0", "smoothPath：单点只落一个 M");
+  eq(T.smoothPath([]), "", "smoothPath：空数组返回空串");
+  eq((T.smoothPath([[0, 1], [1, 2], null, [3, 4], [4, 5]]).match(/M/g) || []).length, 2,
+    "smoothPath：null 是断点，两侧各自成段");
+  // M/C 的参数都是成对的 (x,y)，所以奇数位就是 y。共线的三点不该被抹出上下摆动。
+  const nums = T.smoothPath([[0, 0], [10, 0], [20, 0]]).match(/-?\d+\.\d+/g).map(Number);
+  eq(nums.filter((_, i) => i % 2 === 1).every((v) => v === 0), true,
+    "smoothPath：水平直线仍是直线，控制点不引入起伏");
+}
+
+{
+  // 延迟检测块的行区（本次改动）：不管有没有数据都保持同一高度——
+  // 没数据铺满 CARD_PROBES 行骨架，终态给一行提示，两者都放进固定高度的 .latrows。
+  const on = { id: 1, name: "n", online: true, metrics: {}, cpu_cores: 2, mem_total: 1 };
+  const skel = T.latencyBlock(on);
+  eq((skel.match(/latrow sk/g) || []).length, 3, "latencyBlock：数据未到时骨架行数 = CARD_PROBES");
+  eq(skel.indexOf('class="latrows"') > -1, true, "latencyBlock：骨架也放进固定行区");
+  const off = T.latencyBlock({ id: 2, name: "m", online: false, metrics: null, cpu_cores: 2, mem_total: 1 });
+  eq(off.indexOf("latrow solo") > -1, true, "latencyBlock：离线时给一行提示");
+  eq(off.indexOf('class="latrows"') > -1, true, "latencyBlock：单行提示同样在固定行区里，高度不跳");
+  const blank = T.latencyBlock({ id: 3, name: "p", online: true, metrics: null, cpu_cores: 2, mem_total: 1 });
+  eq(blank.indexOf('class="latrows"') > -1, true, "latencyBlock：等待上报时也在固定行区里");
+}
+
 /* ------------------------------------- 5. 曲线处理：削峰 / 平滑 / 相对基准 */
 eq(T.median([]), null, "median：空数组");
 eq(T.median([7]), 7, "median：单元素");
