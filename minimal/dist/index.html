@@ -515,11 +515,24 @@ function cpuName(name){
 /* ---------------- API ---------------- */
 function ApiError(status, message){ this.name = "ApiError"; this.status = status; this.message = message; }
 ApiError.prototype = Object.create(Error.prototype);
-function api(path){
-  return fetch("/api" + path, { headers: { accept: "application/json" } }).then(function(res){
+/**
+ * 统一的 API 请求，带超时。
+ * 为什么必须有超时：浏览器对同一源只开 6 条连接。只要有几条请求挂住不返回，
+ * 它们就一直占着连接槽，后面所有节点的延迟曲线全被堵在队列里——表现就是
+ * 「首屏折线迟迟不出来」，而看起来每个请求都「还没失败」。
+ * 超时后 abort，调用方按失败处理并进入退避重试，连接槽立刻释放。
+ */
+function api(path, timeoutMs){
+  var ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+  var timer = ctl ? setTimeout(function(){ ctl.abort(); }, timeoutMs || 20000) : null;
+  var done = function(){ if (timer) clearTimeout(timer); };
+  return fetch("/api" + path, {
+    headers: { accept: "application/json" },
+    signal: ctl ? ctl.signal : undefined
+  }).then(function(res){
     if (!res.ok) return res.text().then(function(t){ throw new ApiError(res.status, t || res.statusText || "网络错误"); });
     return res.status === 204 ? undefined : res.json();
-  });
+  }).then(function(v){ done(); return v; }, function(e){ done(); throw e; });
 }
 
 /* ---------------- 数据健壮性：坏数据只降级自身，不拖垮整页 ---------------- */
@@ -562,12 +575,12 @@ var cache = {};
  * 列表页的迷你曲线只有一百来像素宽，按设备像素宽度去要是浪费：每个节点都要发一次。
  */
 var CARD_POINTS = 60;
-function loadSeries(id, series, hours, pts){
+function loadSeries(id, series, hours, pts, timeoutMs){
   pts = pts || Math.round((window.innerWidth || 1200) * (window.devicePixelRatio || 1));
   var key = id + ":" + series + ":" + hours + ":" + pts;
   var hit = cache[key];
   if (hit && Date.now() - hit.at < 60000) return Promise.resolve(hit.data);
-  return api("/nodes/" + id + "/metrics?hours=" + hours + "&points=" + pts + "&series=" + series)
+  return api("/nodes/" + id + "/metrics?hours=" + hours + "&points=" + pts + "&series=" + series, timeoutMs)
     .then(function(d){ cache[key] = { at: Date.now(), data: d }; return d; })
     .catch(function(){ return null; });
 }
@@ -683,16 +696,30 @@ function scheduleListRender(){
   var raf = window.requestAnimationFrame || function(f){ return setTimeout(f, 16); };
   raf(function(){ listRenderQueued = false; if (route.kind === "list") renderListBody(); });
 }
+var PING_TIMEOUT = 8000;    // 单条延迟请求的上限：超时就放掉连接槽，下一轮再试
+/**
+ * 取延迟的顺序：**按屏幕上的顺序**，当前筛选可见的排前面。
+ * 浏览器同源只开 6 条连接，先发谁就先回谁——若按接口返回的原始顺序发，
+ * 首屏那几张卡片很可能排在队列末尾，用户就会觉得「折线半天不出来」。
+ */
+function pingOrder(){
+  var sorted = sortedNodes();
+  var shown = filterNodes(sorted, list.q);
+  var seen = {}, out = [];
+  function push(n){ if (n.online && !seen[n.id]){ seen[n.id] = 1; out.push(n); } }
+  shown.forEach(push);
+  sorted.forEach(push);      // 被筛选掉的也要取：汇总磁贴的「平均延迟」是按全部节点算的
+  return out;
+}
 function refreshPing(){
   if (!state.nodes) return;
   var now = Date.now();
-  state.nodes.forEach(function(n){
-    if (!n.online) return;
+  pingOrder().forEach(function(n){
     if (pingInflight[n.id]) return;
     if (pingTry[n.id] && now - pingTry[n.id] < (pingWait[n.id] || PING_TTL)) return;
     pingInflight[n.id] = true;
     pingTry[n.id] = now;
-    loadSeries(n.id, "ping", 1, CARD_POINTS).then(function(d){
+    loadSeries(n.id, "ping", 1, CARD_POINTS, PING_TIMEOUT).then(function(d){
       pingInflight[n.id] = false;
       var s = pingSummary(d);
       if (s) state.ping[n.id] = s;
@@ -868,9 +895,10 @@ function subLine(n){
 }
 function statusChip(n){
   var st = nodeState(n);
+  // 文案包一层 .cl：徽标里的「在线 14 天」是分钟级变化，就地改文本比重建整张卡便宜得多
   return '<span class="chip' + (st === "online" ? " live" : st === "pending" ? " warn" : "") + '">' +
     '<span class="dot' + (st === "online" ? " pulse" : st === "pending" ? " pending" : " off") + '"></span>' +
-    esc(statusLabel(n)) + '</span>';
+    '<span class="cl">' + esc(statusLabel(n)) + '</span></span>';
 }
 function countryChip(n){
   if (!n.country) return "";
@@ -897,11 +925,13 @@ function expiryText(n){
 }
 function expirySmall(n){ return expiryHTML(daysUntil(n.expires_at), false); }
 /** 卡片上的占用条：标签、数值、细条各占一行，三列并排也放得下。
- *  `fill` 是该条在正常水位下的颜色（超过 75% / 90% 仍会转成告警色）。 */
-function meter(label, pct, foot, fill){
+ *  `fill` 是该条在正常水位下的颜色（超过 75% / 90% 仍会转成告警色）。
+ *  `key` 给条子一个定位标记，每 2 秒的推送靠它就地改数值，不必重建卡片。 */
+function meter(label, pct, foot, fill, key){
   var p = pct == null ? null : clamp(pct, 0, 100);
   var tone = p == null ? "flat" : p >= 90 ? "bad" : p >= 75 ? "warn" : "";
-  return '<div class="meter"' + (fill ? ' style="--fill:' + fill + '"' : '') + '>' +
+  return '<div class="meter"' + (key ? ' data-m="' + key + '"' : '') +
+    (fill ? ' style="--fill:' + fill + '"' : '') + '>' +
     '<div class="ml">' + esc(label) + '</div>' +
     '<div class="mv">' + esc(foot) + '</div>' +
     '<div class="bar"><i class="' + tone + '" style="width:' + (p == null ? 0 : p).toFixed(1) + '%"></i></div></div>';
@@ -1008,7 +1038,13 @@ function tilesHTML(nodes){
       (totals.length ? esc(totals[0]) : "—") + '</div>' +
       '<div class="s">' + (totals.length > 1 ? esc(totals.slice(1).join(" + ")) + " · 其他币种" : "按计费周期折算合计") + '</div></div>';
 }
-function nodeCard(n){
+/** 卡片的 class：离线 / 待上报整卡压暗。 */
+function cardClass(n){ return "card" + (nodeState(n) === "online" ? "" : " off"); }
+/**
+ * 卡片内容（不含外层 <article>）。拆出来是为了「就地更新」：
+ * 数据每 2 秒推一次，但延迟块里的 SVG 不该跟着重建——只重建真正变了的那部分。
+ */
+function cardInner(n){
   var m = n.metrics, st = nodeState(n);
   var deployed = (num(n.cpu_cores) && n.cpu_cores > 0) || (num(n.mem_total) && n.mem_total > 0);
   var used = monthUsage(n);
@@ -1037,34 +1073,133 @@ function nodeCard(n){
       latencyBlock(n) +
       '<div class="meters">' +
         meter("CPU " + (num(n.cpu_cores) && n.cpu_cores > 0 ? n.cpu_cores : "?") + " 核", m ? m.cpu : null,
-          m ? m.load.map(function(x){ return x.toFixed(2); }).join(" ") : "—", "var(--c1)") +
+          m ? m.load.map(function(x){ return x.toFixed(2); }).join(" ") : "—", "var(--c1)", "cpu") +
         meter("内存", m ? percent(m.mem_used, m.mem_total) : null,
-          m ? pairShort(m.mem_used, m.mem_total) : bytes(n.mem_total), "var(--c5)") +
+          m ? pairShort(m.mem_used, m.mem_total) : bytes(n.mem_total), "var(--c5)", "mem") +
         meter("硬盘", m ? percent(m.disk_used, m.disk_total) : null,
-          m ? pairShort(m.disk_used, m.disk_total) : bytes(n.disk_total), "var(--c3)") +
+          m ? pairShort(m.disk_used, m.disk_total) : bytes(n.disk_total), "var(--c3)", "disk") +
       '</div>' +
       '<div class="cfoot">' +
         '<div class="crow">' +
           '<span class="rates">' +
-            '<span class="io"><span class="d">↓</span> <b>' + (m ? rate(m.net_rx) : "—") + '</b></span>' +
-            '<span class="io"><span class="u">↑</span> <b>' + (m ? rate(m.net_tx) : "—") + '</b></span>' +
+            '<span class="io"><span class="d">↓</span> <b data-io="rx">' + (m ? rate(m.net_rx) : "—") + '</b></span>' +
+            '<span class="io"><span class="u">↑</span> <b data-io="tx">' + (m ? rate(m.net_tx) : "—") + '</b></span>' +
           '</span>' +
           '<span class="price">' + costHTML + '</span>' +
         '</div>' +
         (trafficPct != null
-          ? '<div class="trafficbar"><i class="' + trafficTone + '" style="width:' + trafficPct.toFixed(1) + '%"></i></div>'
+          ? '<div class="trafficbar"><i data-trbar class="' + trafficTone + '" style="width:' + trafficPct.toFixed(1) + '%"></i></div>'
           : '') +
         '<div class="crow small">' +
-          '<span>流量 <b>' + esc(trafficText) + '</b></span>' +
-          '<span>累计 ↓' + bytes(n.total_rx) + ' ↑' + bytes(n.total_tx) + '</span>' +
+          '<span>流量 <b data-tr="used">' + esc(trafficText) + '</b></span>' +
+          '<span data-tr="total">累计 ↓' + bytes(n.total_rx) + ' ↑' + bytes(n.total_tx) + '</span>' +
         '</div>' +
       '</div>';
   }
 
-  return '<article class="card' + (st === "online" ? "" : " off") + '" data-id="' + n.id + '" tabindex="0" role="button">' +
-    '<div class="chead"><div class="l"><div class="nline"><h3 class="nname">' + esc(n.name) + '</h3>' + countryChip(n) + '</div>' +
+  return '<div class="chead"><div class="l"><div class="nline"><h3 class="nname">' + esc(n.name) + '</h3>' + countryChip(n) + '</div>' +
     '<p class="sub">' + esc(sub) + '</p></div>' +
-    '<div class="r">' + statusChip(n) + expiryText(n) + '</div></div>' + body + '</article>';
+    '<div class="r">' + statusChip(n) + expiryText(n) + '</div></div>' + body;
+}
+function nodeCard(n){
+  return '<article class="' + cardClass(n) + '" data-id="' + n.id + '" tabindex="0" role="button">' + cardInner(n) + '</article>';
+}
+
+/* ---------------- 就地更新：别让每 2 秒的推送重建整块网格 ---------------- */
+var cardSigs = {};   // id -> 上次渲染时的结构指纹
+/**
+ * 结构指纹：决定「这张卡的 HTML 要不要重建」。
+ * 刻意**不含**每秒都在变的数值（占用率、速率、流量）——那些由 updateCardLive 就地改；
+ * 也不含 uptime：徽标里的「在线 14 天」按分钟变，改文本比重建整张卡便宜得多。
+ */
+function cardSig(n){
+  var p = state.ping[n.id];
+  return [
+    n.id, n.name || "", n.country || "", n.os || "", n.virt || "", n.arch || "",
+    nodeState(n),
+    daysUntil(n.expires_at),     // 跨天要更新「N 天后到期」
+    n.price, n.currency || "", n.billing_cycle || "",
+    n.cpu_cores, n.mem_total, n.disk_total,
+    n.traffic_limit, n.traffic_mode || "",
+    p ? p.at : 0                 // 延迟数据刷新了才重建延迟块
+  ].join("|");
+}
+/** 网格结构指纹：分组、每组节点及顺序。变了才整块重建。 */
+function gridSig(groups){
+  return groups.map(function(g){
+    return (g.label || "") + "#" + g.count + ":" + g.nodes.map(function(n){ return n.id; }).join(",");
+  }).join("|");
+}
+/** 卡片里会随推送变化的节点，取一次缓存起来——每帧几十次 querySelector 也不便宜。 */
+function liveRefs(el){
+  if (el._live) return el._live;
+  var q = function(sel){ return el.querySelector(sel); };
+  el._live = {
+    cl: q(".chip .cl"),
+    cpuV: q('[data-m="cpu"] .mv'), cpuB: q('[data-m="cpu"] .bar i'),
+    memV: q('[data-m="mem"] .mv'), memB: q('[data-m="mem"] .bar i'),
+    diskV: q('[data-m="disk"] .mv'), diskB: q('[data-m="disk"] .bar i'),
+    rx: q('[data-io="rx"]'), tx: q('[data-io="tx"]'),
+    trUsed: q('[data-tr="used"]'), trTotal: q('[data-tr="total"]'), trBar: q("[data-trbar]")
+  };
+  return el._live;
+}
+function setText(el, v){ if (el && el.textContent !== v) el.textContent = v; }
+function setMeter(vEl, bEl, pct, text){
+  setText(vEl, text);
+  if (!bEl) return;
+  var p = pct == null ? 0 : clamp(pct, 0, 100);
+  var tone = pct == null ? "flat" : p >= 90 ? "bad" : p >= 75 ? "warn" : "";
+  var w = p.toFixed(1) + "%";
+  if (bEl.style.width !== w) bEl.style.width = w;
+  if (bEl.className !== tone) bEl.className = tone;
+}
+/** 只改每 2 秒会变的那几处：徽标时长、三条占用、上下行速率、流量。 */
+function updateCardLive(el, n){
+  var r = liveRefs(el), m = n.metrics;
+  if (r.cl) setText(r.cl, statusLabel(n));
+  setMeter(r.cpuV, r.cpuB, m ? m.cpu : null, m ? m.load.map(function(x){ return x.toFixed(2); }).join(" ") : "—");
+  setMeter(r.memV, r.memB, m ? percent(m.mem_used, m.mem_total) : null,
+    m ? pairShort(m.mem_used, m.mem_total) : bytes(n.mem_total));
+  setMeter(r.diskV, r.diskB, m ? percent(m.disk_used, m.disk_total) : null,
+    m ? pairShort(m.disk_used, m.disk_total) : bytes(n.disk_total));
+  setText(r.rx, m ? rate(m.net_rx) : "—");
+  setText(r.tx, m ? rate(m.net_tx) : "—");
+  var used = monthUsage(n);
+  var hasLimit = num(n.traffic_limit) && n.traffic_limit > 0;
+  var pct = hasLimit ? percent(used, n.traffic_limit) : null;
+  setText(r.trUsed, hasLimit ? pair(used, n.traffic_limit) + " · " + pct.toFixed(1) + "%" : bytes(used) + " / " + FOREVER);
+  setText(r.trTotal, "累计 ↓" + bytes(n.total_rx) + " ↑" + bytes(n.total_tx));
+  if (r.trBar && pct != null){
+    var w = pct.toFixed(1) + "%", tone = pct >= 90 ? "bad" : pct >= 75 ? "warn" : "";
+    if (r.trBar.style.width !== w) r.trBar.style.width = w;
+    if (r.trBar.className !== tone) r.trBar.className = tone;
+  }
+}
+/** 结构变了就重建这一张，没变只改数值。 */
+function syncCard(el, n){
+  var sig = cardSig(n);
+  if (cardSigs[n.id] !== sig){
+    el.className = cardClass(n);
+    el.innerHTML = cardInner(n);
+    el._live = null;             // 子节点换了，缓存的引用作废
+    cardSigs[n.id] = sig;
+    return;
+  }
+  updateCardLive(el, n);
+}
+function syncCards(groups){
+  var grid = document.getElementById("grid");
+  if (!grid) return;
+  var byId = {}, cards = grid.querySelectorAll(".card");
+  for (var i = 0; i < cards.length; i++) byId[cards[i].getAttribute("data-id")] = cards[i];
+  for (var gi = 0; gi < groups.length; gi++){
+    var ns = groups[gi].nodes;
+    for (var j = 0; j < ns.length; j++){
+      var el = byId[ns[j].id];
+      if (el) syncCard(el, ns[j]);
+    }
+  }
 }
 /* ==================== 世界地图 ==================== */
 var MAP_LAND = null;          // 陆地点阵路径，只算一次
@@ -1131,6 +1266,12 @@ function renderMapDots(shown){
   var box = document.getElementById("mapbox");
   if (!box) return;
   var g = regionGroups(shown);
+  // 亮点只随「地区 / 在线数 / 节点数」变化。没变就整段跳过——否则每 2 秒替换一次
+  // .mdots，会让背后 4000 个子路径的陆地掩膜跟着重绘一遍，这是卡顿的另一个来源。
+  var sig = g.regions.map(function(r){ return r.cc + r.total + r.online; }).join(",") +
+    "|" + shown.length + "|" + g.unmapped;
+  if (box._sig === sig) return;
+  box._sig = sig;
   // 亮点是纯色圆点：颜色即在线情况。曾试过把地区国旗画上去，太小反而糊成一团。
   var dots = g.regions.map(function(r){
     var rad = 6 + Math.min(r.total - 1, 3) * 1.1;
@@ -1305,15 +1446,30 @@ function renderListBody(){
   if (grid){
     if (!sorted.length){
       grid.innerHTML = '<p class="empty">还没有节点</p>';
+      grid._sig = "";
+      cardSigs = {};
     } else if (!shown.length){
       grid.innerHTML = '<p class="empty">没有匹配「' + esc(list.q) + '」的节点。' +
         '<button data-act="clear-q" style="text-decoration:underline">清空搜索</button></p>';
+      grid._sig = "";
+      cardSigs = {};
     } else {
-      grid.innerHTML = groups.map(function(g){
-        return (g.label ? '<div class="ghead">' + (g.flag ? '<i class="fg">' + g.flag + '</i>' : '') +
-          '<b>' + esc(g.label) + '</b><span class="n">' + g.count + '</span></div>' : '') +
-          '<div class="grid">' + g.nodes.map(nodeCard).join("") + '</div>';
-      }).join("");
+      var sig = gridSig(groups);
+      if (grid._sig !== sig){
+        // 结构变了（筛选 / 分组 / 排序 / 节点增减）：整块重建
+        grid.innerHTML = groups.map(function(g){
+          return (g.label ? '<div class="ghead">' + (g.flag ? '<i class="fg">' + g.flag + '</i>' : '') +
+            '<b>' + esc(g.label) + '</b><span class="n">' + g.count + '</span></div>' : '') +
+            '<div class="grid">' + g.nodes.map(nodeCard).join("") + '</div>';
+        }).join("");
+        grid._sig = sig;
+        cardSigs = {};
+        groups.forEach(function(g){ g.nodes.forEach(function(n){ cardSigs[n.id] = cardSig(n); }); });
+      } else {
+        // 结构没变：只把变了的值就地改掉，延迟块里的 SVG 一个都不重建。
+        // 60 张卡片时全量重建约 43ms，每 2 秒来一次必然掉帧；就地更新只有零头。
+        syncCards(groups);
+      }
     }
   }
 

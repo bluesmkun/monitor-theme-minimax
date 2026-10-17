@@ -17,14 +17,18 @@ import fs from "node:fs";
 
 const args = process.argv.slice(2);
 const url = args[0];
-const out = args[1];
-if (!url || !out) {
-  console.error("用法: node dev/cdp-shot.mjs <url> <out.png> [--hover 选择器] [--wait ms] [--size 1400x760]");
+// out 可省：只想在页面里跑一段测量脚本时，传 `--eval` 即可，不必非要截图。
+const out = args[1] && !args[1].startsWith("--") ? args[1] : null;
+if (!url) {
+  console.error("用法: node dev/cdp-shot.mjs <url> [out.png] [--hover 选择器] [--wait ms] [--size 1400x760] [--eval 'js']");
   process.exit(2);
 }
 const opt = (name, dflt) => { const i = args.indexOf(name); return i > -1 ? args[i + 1] : dflt; };
 const hoverSel = opt("--hover", null);
 const waitMs = Number(opt("--wait", 4000));
+// --eval <js>：在页面里求值并把结果打到 stdout。用来量渲染耗时、DOM 规模这类
+// 「必须量不能猜」的东西——比如每次 WS 推送重建了多少节点、耗时多少毫秒。
+const evalArg = opt("--eval", null);
 const [W, H] = opt("--size", "1400x760").split("x").map(Number);
 // --clip 既接受选择器（裁到该元素四周留 --pad 像素），也接受 x,y,w,h。
 // 裁到卡片级别才看得清阴影这种几像素的差别。
@@ -96,6 +100,17 @@ try {
   await S("Page.navigate", { url });
   await sleep(waitMs);
 
+  if (evalArg) {
+    const { result, exceptionDetails } = await S("Runtime.evaluate", {
+      expression: evalArg, returnByValue: true, awaitPromise: true,
+    });
+    if (exceptionDetails) {
+      console.log("EVAL 异常: " + (exceptionDetails.exception?.description || exceptionDetails.text || "").slice(0, 400));
+    } else {
+      console.log("EVAL " + (typeof result.value === "string" ? result.value : JSON.stringify(result.value)));
+    }
+  }
+
   if (cssArg) {
     await S("Runtime.evaluate", {
       expression: "(()=>{const s=document.createElement('style');s.textContent=" + JSON.stringify(cssArg) +
@@ -111,6 +126,8 @@ try {
     await S("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: ["hover"] });
     await sleep(500);   // 等 transition（卡片是 .18s）走完再截
   }
+
+  if (!out) { ws.close(); cleanup(0); }
 
   const shot = { format: "png" };
   if (clipArg) {

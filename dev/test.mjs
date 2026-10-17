@@ -311,6 +311,41 @@ eq(T.pingSummary({ ping: [] }).probes, [], "pingSummary：空样本");
   eq(blank.indexOf('class="latrows"') > -1, true, "latencyBlock：等待上报时也在固定行区里");
 }
 
+/* ------------------------------ 4b. 增量渲染的指纹（卡顿修复的核心不变量） */
+{
+  // gridSig：只有「分组 / 顺序 / 成员」变了才该整块重建
+  const g1 = [{ label: "日本", count: 2, nodes: [{ id: 1 }, { id: 2 }] }];
+  const g2 = [{ label: "日本", count: 2, nodes: [{ id: 1 }, { id: 2 }] }];
+  const g3 = [{ label: "日本", count: 2, nodes: [{ id: 2 }, { id: 1 }] }];
+  const g4 = [{ label: "美国", count: 2, nodes: [{ id: 1 }, { id: 2 }] }];
+  eq(T.gridSig(g1) === T.gridSig(g2), true, "gridSig：同样的分组得到同样的指纹");
+  eq(T.gridSig(g1) === T.gridSig(g3), false, "gridSig：节点顺序变了要重建");
+  eq(T.gridSig(g1) === T.gridSig(g4), false, "gridSig：分组标签变了要重建");
+
+  // cardSig：每 2 秒都会变的数值**不能**进指纹，否则等于没做增量
+  const base = {
+    id: 7, name: "n", country: "JP", os: "Debian", virt: "kvm", arch: "x86_64",
+    online: true, metrics: { uptime: 100, cpu: 10, mem_used: 1, mem_total: 2, disk_used: 1, disk_total: 4,
+      net_rx: 100, net_tx: 50, load: [0, 0, 0] },
+    cpu_cores: 2, mem_total: 2, disk_total: 4, traffic_limit: 100, traffic_mode: "sum",
+    price: 10, currency: "CNY", billing_cycle: "monthly", expires_at: "2030-01-01",
+  };
+  const sig = T.cardSig(base);
+  eq(T.cardSig({ ...base, metrics: { ...base.metrics, cpu: 77, net_rx: 999, uptime: 999 } }) === sig, true,
+    "cardSig：CPU / 速率 / uptime 变化不该触发重建（它们由就地更新处理）");
+  eq(T.cardSig({ ...base, online: false, metrics: null }) === sig, false,
+    "cardSig：在线状态变化要重建");
+  eq(T.cardSig({ ...base, name: "改名" }) === sig, false, "cardSig：名字变化要重建");
+  eq(T.cardSig({ ...base, expires_at: "2031-01-01" }) === sig, false, "cardSig：到期日变化要重建");
+
+  // 延迟数据换了（at 变了）要重建延迟块，否则波线永远停在第一版
+  T.state.ping[7] = { probes: [], at: 1000 };
+  const withPing = T.cardSig(base);
+  T.state.ping[7] = { probes: [], at: 2000 };
+  eq(T.cardSig(base) === withPing, false, "cardSig：延迟数据刷新后要重建延迟块");
+  delete T.state.ping[7];
+}
+
 /* ------------------------------------- 5. 曲线处理：削峰 / 平滑 / 相对基准 */
 eq(T.median([]), null, "median：空数组");
 eq(T.median([7]), 7, "median：单元素");

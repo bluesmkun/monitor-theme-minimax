@@ -45,6 +45,10 @@ const DELAY_PING = argDelay > -1 ? Number(process.argv[argDelay + 1]) || 0 : 0;
 // 以及客户端会不会按短周期重试。比 --delay-ping 更好用——请求会正常结束，
 // 无头浏览器的虚拟时间不会被挂住的请求卡死。
 const FAIL_PING = process.argv.includes("--fail-ping");
+// --nodes <n>：把节点表复制到 n 个，用于规模压测。本地只有 8 个节点，
+// 8 张卡片根本压不出掉帧，也看不出「请求扇出」到底有多慢。
+const argNodes = process.argv.indexOf("--nodes");
+const STRESS_NODES = argNodes > -1 ? Number(process.argv[argNodes + 1]) || 0 : 0;
 // 用时间而不是调用次数翻转：次数会被任何一次 curl 消耗掉，结果不可复现。
 const startedMs = Date.now();
 
@@ -52,7 +56,7 @@ const GB = 1024 ** 3;
 const MB = 1024 ** 2;
 
 /* ------------------------------------------------------------------ 节点定义 */
-const SPECS = [
+let SPECS = [
   {
     id: 1, name: "香港 · CN2 GIA", sort: 1, country: "HK", online: true,
     os: "Debian GNU/Linux 12 (bookworm)", kernel: "6.1.0-23-amd64", arch: "x86_64", virt: "kvm",
@@ -134,6 +138,24 @@ const SPECS = [
     latency: [0, 0, 0], loss: [0, 0, 0]
   }
 ];
+
+/**
+ * 压测模式：按 --nodes 把节点表复制到目标数量（id / sort 重编，名字加序号）。
+ * 必须放在 seed / BOOT 之前——它们都按 SPECS 逐项建索引，晚于它们展开会漏掉新增的 id。
+ */
+if (STRESS_NODES > SPECS.length) {
+  const base = SPECS.slice();
+  SPECS = Array.from({ length: STRESS_NODES }, (_, i) => {
+    const b = base[i % base.length];
+    return {
+      ...b,
+      id: i + 1,
+      sort: i + 1,
+      name: b.name.replace(/ #\d+$/, "") + " #" + (Math.floor(i / base.length) + 1),
+    };
+  });
+  console.log("压测模式：节点数 " + SPECS.length);
+}
 
 const MONTH_START = "2026-09-01";
 
